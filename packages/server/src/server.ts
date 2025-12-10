@@ -24,6 +24,7 @@ function getCorsOrigins(): string[] {
     'https://openfacilitator.io',
     'https://www.openfacilitator.io',
     'https://dashboard.openfacilitator.io',
+    'https://openfacilitator-dashboard.vercel.app',
   ];
 
   // Add custom dashboard URL if set
