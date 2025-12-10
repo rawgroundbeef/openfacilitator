@@ -166,10 +166,10 @@ export async function removeCustomDomain(domain: string): Promise<CustomDomainRe
   try {
     const config = getConfig();
     
-    // First, get the domain ID
+    // First, get the domain ID using the domains query
     const domainsQuery = `
-      query service($id: String!) {
-        service(id: $id) {
+      query domains($projectId: String!, $serviceId: String!, $environmentId: String!) {
+        domains(projectId: $projectId, serviceId: $serviceId, environmentId: $environmentId) {
           customDomains {
             id
             domain
@@ -179,12 +179,16 @@ export async function removeCustomDomain(domain: string): Promise<CustomDomainRe
     `;
 
     const domainsResult = await railwayQuery<{
-      service: {
+      domains: {
         customDomains: Array<{ id: string; domain: string }>;
       };
-    }>(domainsQuery, { id: config.serviceId });
+    }>(domainsQuery, {
+      projectId: config.projectId,
+      serviceId: config.serviceId,
+      environmentId: config.environmentId,
+    });
 
-    const domainEntry = domainsResult.service.customDomains.find(
+    const domainEntry = domainsResult.domains.customDomains.find(
       (d) => d.domain === domain
     );
 
@@ -224,9 +228,10 @@ export async function getDomainStatus(domain: string): Promise<DomainStatus | nu
   try {
     const config = getConfig();
     
+    // Use the domains query with all three required IDs
     const query = `
-      query service($id: String!) {
-        service(id: $id) {
+      query domains($projectId: String!, $serviceId: String!, $environmentId: String!) {
+        domains(projectId: $projectId, serviceId: $serviceId, environmentId: $environmentId) {
           customDomains {
             id
             domain
@@ -246,7 +251,7 @@ export async function getDomainStatus(domain: string): Promise<DomainStatus | nu
     `;
 
     const result = await railwayQuery<{
-      service: {
+      domains: {
         customDomains: Array<{
           id: string;
           domain: string;
@@ -262,9 +267,13 @@ export async function getDomainStatus(domain: string): Promise<DomainStatus | nu
           };
         }>;
       };
-    }>(query, { id: config.serviceId });
+    }>(query, {
+      projectId: config.projectId,
+      serviceId: config.serviceId,
+      environmentId: config.environmentId,
+    });
 
-    const domainEntry = result.service.customDomains.find(
+    const domainEntry = result.domains.customDomains.find(
       (d) => d.domain === domain
     );
 
@@ -273,16 +282,17 @@ export async function getDomainStatus(domain: string): Promise<DomainStatus | nu
     }
 
     // Determine overall status based on DNS records
+    // Railway uses DNS_RECORD_STATUS_PROPAGATED for success
     const allValid = domainEntry.status.dnsRecords.every(
-      (r) => r.status === 'VALID' || r.status === 'valid'
+      (r) => r.status === 'DNS_RECORD_STATUS_PROPAGATED'
     );
 
     return {
       domain: domainEntry.domain,
       status: allValid ? 'active' : 'pending',
       dnsRecords: domainEntry.status.dnsRecords.map((r) => ({
-        type: r.recordType,
-        name: r.hostlabel ? `${r.hostlabel}.${r.zone}` : r.zone,
+        type: r.recordType.replace('DNS_RECORD_TYPE_', ''),
+        name: r.hostlabel,
         value: r.requiredValue,
       })),
     };
