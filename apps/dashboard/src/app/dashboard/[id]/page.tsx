@@ -31,11 +31,13 @@ import {
 import { api, type Transaction } from '@/lib/api';
 import { formatDate, formatAddress } from '@/lib/utils';
 
-const networkNames: Record<number, string> = {
+const networkNames: Record<string | number, string> = {
   8453: 'Base',
   84532: 'Base Sepolia',
   1: 'Ethereum',
   11155111: 'Sepolia',
+  'solana': 'Solana',
+  'solana-devnet': 'Solana Devnet',
 };
 
 export default function FacilitatorDetailPage() {
