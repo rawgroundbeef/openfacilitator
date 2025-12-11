@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import ora from 'ora';
 import fs from 'fs/promises';
 import path from 'path';
-import { defaultTokens, getSupportedChainIds } from '@openfacilitator/core';
+import { defaultTokens, getSupportedChains } from '@openfacilitator/core';
 
 interface InitOptions {
   name?: string;
@@ -31,7 +31,7 @@ export async function initCommand(options: InitOptions) {
       name: options.name || 'My Facilitator',
       subdomain: options.subdomain || 'my-facilitator',
       ownerAddress: options.owner || '0x0000000000000000000000000000000000000000',
-      supportedChains: getSupportedChainIds(),
+      supportedChains: getSupportedChains(),
       supportedTokens: defaultTokens,
       server: {
         port: 3001,

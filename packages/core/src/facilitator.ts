@@ -1,4 +1,4 @@
-import { createPublicClient, http, type Hex } from 'viem';
+import { createPublicClient, http, type Hex, type Address } from 'viem';
 import { base, baseSepolia, mainnet, sepolia } from 'viem/chains';
 import type {
   FacilitatorConfig,
@@ -11,6 +11,7 @@ import type {
   ChainId,
 } from './types.js';
 import { getChainIdFromNetwork, getNetworkFromChainId, defaultChains } from './chains.js';
+import { executeERC3009Settlement } from './erc3009.js';
 
 /**
  * Chain ID to viem chain mapping (EVM chains only)
@@ -203,7 +204,7 @@ export class Facilitator {
 
       // Parse payload
       const decoded = Buffer.from(paymentPayload, 'base64').toString('utf-8');
-      const _payload: X402PaymentPayload = JSON.parse(decoded);
+      const payload: X402PaymentPayload = JSON.parse(decoded);
 
       const chainId = getChainIdFromNetwork(requirements.network);
       if (!chainId) {
@@ -214,10 +215,6 @@ export class Facilitator {
         };
       }
 
-      // TODO: Execute the transfer
-      // For EVM: ERC-3009 receiveWithAuthorization transaction
-      // For Solana: SPL Token transfer
-
       if (!privateKey) {
         return {
           success: false,
@@ -226,12 +223,50 @@ export class Facilitator {
         };
       }
 
-      // Mock transaction hash for MVP
-      const mockTxHash = `0x${'0'.repeat(64)}`;
+      // Handle EVM chains (Base, Ethereum)
+      if (isEVMChain(chainId)) {
+        const result = await executeERC3009Settlement({
+          chainId,
+          tokenAddress: requirements.asset as Address,
+          authorization: {
+            from: payload.authorization.from as Address,
+            to: payload.authorization.to as Address,
+            value: payload.authorization.value,
+            validAfter: payload.authorization.validAfter,
+            validBefore: payload.authorization.validBefore,
+            nonce: payload.authorization.nonce as Hex,
+          },
+          signature: payload.signature as Hex,
+          facilitatorPrivateKey: privateKey,
+        });
+
+        if (result.success) {
+          return {
+            success: true,
+            transactionHash: result.transactionHash,
+            network: requirements.network,
+          };
+        } else {
+          return {
+            success: false,
+            errorMessage: result.errorMessage,
+            network: requirements.network,
+          };
+        }
+      }
+
+      // Handle Solana (not implemented yet)
+      if (chainId === 'solana') {
+        return {
+          success: false,
+          errorMessage: 'Solana settlement not yet implemented',
+          network: requirements.network,
+        };
+      }
 
       return {
-        success: true,
-        transactionHash: mockTxHash,
+        success: false,
+        errorMessage: `Unknown chain type: ${chainId}`,
         network: requirements.network,
       };
     } catch (error) {

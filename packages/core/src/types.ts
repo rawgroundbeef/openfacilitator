@@ -84,6 +84,7 @@ export interface PaymentRequirements {
   network: string;
   maxAmountRequired: string;
   resource: string;
+  asset: string; // Token contract address
   description?: string;
   mimeType?: string;
   outputSchema?: Record<string, unknown>;

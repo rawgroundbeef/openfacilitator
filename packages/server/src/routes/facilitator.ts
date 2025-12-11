@@ -3,6 +3,8 @@ import { createFacilitator, type FacilitatorConfig, type TokenConfig } from '@op
 import { z } from 'zod';
 import { requireFacilitator } from '../middleware/tenant.js';
 import { createTransaction, updateTransactionStatus } from '../db/transactions.js';
+import { decryptPrivateKey } from '../utils/crypto.js';
+import type { Hex } from 'viem';
 
 const router: IRouter = Router();
 
@@ -15,6 +17,7 @@ const verifyRequestSchema = z.object({
     network: z.string(),
     maxAmountRequired: z.string(),
     resource: z.string(),
+    asset: z.string(), // Token contract address
     description: z.string().optional(),
     mimeType: z.string().optional(),
     outputSchema: z.record(z.unknown()).optional(),
@@ -91,7 +94,7 @@ router.post('/verify', requireFacilitator, async (req: Request, res: Response) =
         from_address: result.payer,
         to_address: record.owner_address,
         amount: paymentRequirements.maxAmountRequired,
-        asset: '0x0000000000000000000000000000000000000000', // TODO: extract from payload
+        asset: paymentRequirements.asset,
         status: result.valid ? 'success' : 'failed',
         error_message: result.invalidReason,
       });
@@ -139,21 +142,42 @@ router.post('/settle', requireFacilitator, async (req: Request, res: Response) =
 
     const facilitator = createFacilitator(config);
 
-    // Get the encrypted private key for this facilitator
-    // TODO: Implement key decryption
-    const privateKey = undefined;
+    // Get and decrypt the private key for this facilitator
+    let privateKey: Hex | undefined;
+    if (record.encrypted_private_key) {
+      try {
+        privateKey = decryptPrivateKey(record.encrypted_private_key) as Hex;
+      } catch (e) {
+        console.error('Failed to decrypt private key:', e);
+        res.status(500).json({
+          success: false,
+          errorMessage: 'Failed to decrypt facilitator wallet',
+        });
+        return;
+      }
+    } else {
+      res.status(400).json({
+        success: false,
+        errorMessage: 'Facilitator wallet not configured. Please set up a wallet in the dashboard.',
+      });
+      return;
+    }
 
     const result = await facilitator.settle(paymentPayload, paymentRequirements, privateKey);
 
+    // Parse payload to get from address
+    const decoded = Buffer.from(paymentPayload, 'base64').toString('utf-8');
+    const parsedPayload = JSON.parse(decoded);
+    
     // Log the settlement attempt
     const transaction = createTransaction({
       facilitator_id: record.id,
       type: 'settle',
       network: paymentRequirements.network,
-      from_address: '0x0000000000000000000000000000000000000000', // TODO: extract from payload
+      from_address: parsedPayload.authorization?.from || 'unknown',
       to_address: record.owner_address,
       amount: paymentRequirements.maxAmountRequired,
-      asset: '0x0000000000000000000000000000000000000000', // TODO: extract from payload
+      asset: paymentRequirements.asset,
       status: result.success ? 'pending' : 'failed',
       transaction_hash: result.transactionHash,
       error_message: result.errorMessage,

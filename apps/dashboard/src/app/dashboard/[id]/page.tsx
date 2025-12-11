@@ -18,6 +18,10 @@ import {
   AlertCircle,
   CheckCircle2,
   Loader2,
+  Wallet,
+  Plus,
+  Trash2,
+  Import,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -47,7 +51,10 @@ export default function FacilitatorDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedDns, setCopiedDns] = useState(false);
+  const [copiedAddress, setCopiedAddress] = useState(false);
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const [isImportWalletOpen, setIsImportWalletOpen] = useState(false);
+  const [importPrivateKey, setImportPrivateKey] = useState('');
   const queryClient = useQueryClient();
 
   const { data: facilitator, isLoading } = useQuery({
@@ -79,6 +86,39 @@ export default function FacilitatorDetailPage() {
     queryKey: ['export', id],
     queryFn: () => api.exportConfig(id),
     enabled: false,
+  });
+
+  // Wallet queries and mutations
+  const { data: walletInfo, refetch: refetchWallet } = useQuery({
+    queryKey: ['wallet', id],
+    queryFn: () => api.getWallet(id),
+    enabled: !!id,
+  });
+
+  const generateWalletMutation = useMutation({
+    mutationFn: () => api.generateWallet(id),
+    onSuccess: () => {
+      refetchWallet();
+      queryClient.invalidateQueries({ queryKey: ['wallet', id] });
+    },
+  });
+
+  const importWalletMutation = useMutation({
+    mutationFn: (privateKey: string) => api.importWallet(id, privateKey),
+    onSuccess: () => {
+      refetchWallet();
+      setIsImportWalletOpen(false);
+      setImportPrivateKey('');
+      queryClient.invalidateQueries({ queryKey: ['wallet', id] });
+    },
+  });
+
+  const deleteWalletMutation = useMutation({
+    mutationFn: () => api.deleteWallet(id),
+    onSuccess: () => {
+      refetchWallet();
+      queryClient.invalidateQueries({ queryKey: ['wallet', id] });
+    },
   });
 
   const copyToClipboard = async (text: string) => {
@@ -455,6 +495,157 @@ export default function FacilitatorDetailPage() {
                     </div>
                   ))}
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Wallet Management Card */}
+            <Card className={walletInfo?.hasWallet ? 'border-green-500/50' : 'border-yellow-500/50'}>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Wallet className="w-4 h-4" />
+                  Settlement Wallet
+                  {walletInfo?.hasWallet ? (
+                    <span className="text-xs bg-green-500/20 text-green-500 px-2 py-0.5 rounded-full">Active</span>
+                  ) : (
+                    <span className="text-xs bg-yellow-500/20 text-yellow-500 px-2 py-0.5 rounded-full">Not Configured</span>
+                  )}
+                </CardTitle>
+                <CardDescription>
+                  {walletInfo?.hasWallet 
+                    ? 'This wallet submits settlement transactions'
+                    : 'Required for processing payments'
+                  }
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {walletInfo?.hasWallet ? (
+                  <>
+                    <div>
+                      <Label className="text-muted-foreground text-xs">Address</Label>
+                      <div className="flex items-center gap-2 font-mono text-sm bg-muted p-2 rounded">
+                        <span className="truncate">{walletInfo.address}</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0 shrink-0"
+                          onClick={() => {
+                            navigator.clipboard.writeText(walletInfo.address || '');
+                            setCopiedAddress(true);
+                            setTimeout(() => setCopiedAddress(false), 2000);
+                          }}
+                        >
+                          {copiedAddress ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <Label className="text-muted-foreground text-xs">Gas Balances</Label>
+                      <div className="space-y-1 mt-1">
+                        {Object.entries(walletInfo.balances).length > 0 ? (
+                          Object.entries(walletInfo.balances).map(([chainId, balance]) => (
+                            <div key={chainId} className="flex justify-between text-sm bg-muted p-2 rounded">
+                              <span>{networkNames[chainId] || `Chain ${chainId}`}</span>
+                              <span className="font-mono">{balance.formatted} ETH</span>
+                            </div>
+                          ))
+                        ) : (
+                          <p className="text-sm text-muted-foreground">Loading balances...</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t">
+                      <p className="text-xs text-muted-foreground mb-2">
+                        Fund this address with ETH for gas fees on each network.
+                      </p>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => {
+                          if (confirm('Are you sure? This will remove the wallet and stop settlements.')) {
+                            deleteWalletMutation.mutate();
+                          }
+                        }}
+                        disabled={deleteWalletMutation.isPending}
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Remove Wallet
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      A wallet is required to submit settlement transactions. You can generate a new wallet or import an existing one.
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={() => generateWalletMutation.mutate()}
+                        disabled={generateWalletMutation.isPending}
+                        className="flex-1"
+                      >
+                        {generateWalletMutation.isPending ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <Plus className="w-4 h-4 mr-2" />
+                        )}
+                        Generate Wallet
+                      </Button>
+                      <Dialog open={isImportWalletOpen} onOpenChange={setIsImportWalletOpen}>
+                        <DialogTrigger asChild>
+                          <Button variant="outline" className="flex-1">
+                            <Import className="w-4 h-4 mr-2" />
+                            Import
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Import Private Key</DialogTitle>
+                            <DialogDescription>
+                              Enter your existing private key. It will be encrypted and stored securely.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-4 py-4">
+                            <div>
+                              <Label htmlFor="privateKey">Private Key</Label>
+                              <Input
+                                id="privateKey"
+                                type="password"
+                                placeholder="0x..."
+                                value={importPrivateKey}
+                                onChange={(e) => setImportPrivateKey(e.target.value)}
+                              />
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Must be 0x-prefixed 64 hex characters
+                              </p>
+                            </div>
+                            <Button
+                              onClick={() => importWalletMutation.mutate(importPrivateKey)}
+                              disabled={importWalletMutation.isPending || !importPrivateKey}
+                              className="w-full"
+                            >
+                              {importWalletMutation.isPending ? (
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              ) : null}
+                              Import Wallet
+                            </Button>
+                            {importWalletMutation.isError && (
+                              <p className="text-sm text-destructive">
+                                {importWalletMutation.error?.message || 'Failed to import wallet'}
+                              </p>
+                            )}
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                    {generateWalletMutation.isError && (
+                      <p className="text-sm text-destructive">
+                        {generateWalletMutation.error?.message || 'Failed to generate wallet'}
+                      </p>
+                    )}
+                  </>
+                )}
               </CardContent>
             </Card>
 

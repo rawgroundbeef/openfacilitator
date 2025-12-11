@@ -57,6 +57,18 @@ export interface User {
   createdAt: string;
 }
 
+export interface WalletInfo {
+  hasWallet: boolean;
+  address: string | null;
+  balances: Record<string, { balance: string; formatted: string }>;
+}
+
+export interface WalletGenerateResponse {
+  success: boolean;
+  address: string;
+  message: string;
+}
+
 class ApiClient {
   private baseUrl: string;
 
@@ -167,6 +179,30 @@ class ApiClient {
     dnsRecords?: { type: string; name: string; value: string }[];
   }> {
     return this.request(`/api/admin/facilitators/${facilitatorId}/domain/status`);
+  }
+
+  // Wallet Management
+  async getWallet(facilitatorId: string): Promise<WalletInfo> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/wallet`);
+  }
+
+  async generateWallet(facilitatorId: string): Promise<WalletGenerateResponse> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/wallet`, {
+      method: 'POST',
+    });
+  }
+
+  async importWallet(facilitatorId: string, privateKey: string): Promise<WalletGenerateResponse> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/wallet/import`, {
+      method: 'POST',
+      body: JSON.stringify({ privateKey }),
+    });
+  }
+
+  async deleteWallet(facilitatorId: string): Promise<{ success: boolean; message: string }> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/wallet`, {
+      method: 'DELETE',
+    });
   }
 }
 

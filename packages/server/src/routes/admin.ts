@@ -8,7 +8,7 @@ import {
   deleteFacilitator,
 } from '../db/facilitators.js';
 import { getTransactionsByFacilitator } from '../db/transactions.js';
-import { defaultTokens } from '@openfacilitator/core';
+import { defaultTokens, getWalletAddress, getWalletBalance } from '@openfacilitator/core';
 import { requireAuth, optionalAuth } from '../middleware/auth.js';
 import { 
   addCustomDomain, 
@@ -16,6 +16,8 @@ import {
   getDomainStatus, 
   isRailwayConfigured 
 } from '../services/railway.js';
+import { encryptPrivateKey, decryptPrivateKey, generateWallet } from '../utils/crypto.js';
+import type { Hex } from 'viem';
 
 const router: IRouter = Router();
 
@@ -300,6 +302,181 @@ router.get('/facilitators/:id/transactions', requireAuth, async (req: Request, r
     });
   } catch (error) {
     console.error('Get transactions error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/admin/facilitators/:id/wallet - Generate a new wallet for the facilitator
+ */
+router.post('/facilitators/:id/wallet', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const facilitator = getFacilitatorById(req.params.id);
+    if (!facilitator) {
+      res.status(404).json({ error: 'Facilitator not found' });
+      return;
+    }
+
+    // Check if wallet already exists
+    if (facilitator.encrypted_private_key) {
+      res.status(409).json({ error: 'Wallet already exists. Delete it first to generate a new one.' });
+      return;
+    }
+
+    // Generate new wallet
+    const wallet = generateWallet();
+    
+    // Get the address from the private key
+    const address = getWalletAddress(wallet.privateKey as Hex);
+    
+    // Encrypt and store
+    const encryptedKey = encryptPrivateKey(wallet.privateKey);
+    const updated = updateFacilitator(req.params.id, { encrypted_private_key: encryptedKey });
+    
+    if (!updated) {
+      res.status(500).json({ error: 'Failed to save wallet' });
+      return;
+    }
+
+    res.status(201).json({
+      success: true,
+      address,
+      message: 'Wallet generated. Fund this address with ETH for gas fees.',
+    });
+  } catch (error) {
+    console.error('Generate wallet error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/admin/facilitators/:id/wallet/import - Import an existing private key
+ */
+router.post('/facilitators/:id/wallet/import', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const facilitator = getFacilitatorById(req.params.id);
+    if (!facilitator) {
+      res.status(404).json({ error: 'Facilitator not found' });
+      return;
+    }
+
+    const { privateKey } = req.body;
+    if (!privateKey || typeof privateKey !== 'string') {
+      res.status(400).json({ error: 'Private key is required' });
+      return;
+    }
+
+    // Validate private key format
+    if (!/^0x[a-fA-F0-9]{64}$/.test(privateKey)) {
+      res.status(400).json({ error: 'Invalid private key format. Must be 0x-prefixed 64 hex characters.' });
+      return;
+    }
+
+    // Get address from private key
+    const address = getWalletAddress(privateKey as Hex);
+    
+    // Encrypt and store
+    const encryptedKey = encryptPrivateKey(privateKey);
+    const updated = updateFacilitator(req.params.id, { encrypted_private_key: encryptedKey });
+    
+    if (!updated) {
+      res.status(500).json({ error: 'Failed to save wallet' });
+      return;
+    }
+
+    res.status(201).json({
+      success: true,
+      address,
+      message: 'Wallet imported successfully.',
+    });
+  } catch (error) {
+    console.error('Import wallet error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/admin/facilitators/:id/wallet - Get wallet info (address, balances)
+ */
+router.get('/facilitators/:id/wallet', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const facilitator = getFacilitatorById(req.params.id);
+    if (!facilitator) {
+      res.status(404).json({ error: 'Facilitator not found' });
+      return;
+    }
+
+    if (!facilitator.encrypted_private_key) {
+      res.json({
+        hasWallet: false,
+        address: null,
+        balances: {},
+      });
+      return;
+    }
+
+    // Decrypt private key to get address
+    const privateKey = decryptPrivateKey(facilitator.encrypted_private_key);
+    const address = getWalletAddress(privateKey as Hex);
+
+    // Get balances for supported EVM chains
+    const balances: Record<string, { balance: string; formatted: string }> = {};
+    const supportedChains = JSON.parse(facilitator.supported_chains) as (number | string)[];
+    
+    for (const chainId of supportedChains) {
+      // Only get balances for EVM chains (number chainIds)
+      if (typeof chainId === 'number') {
+        try {
+          const result = await getWalletBalance(chainId, address);
+          balances[String(chainId)] = {
+            balance: result.balance.toString(),
+            formatted: result.formatted,
+          };
+        } catch (e) {
+          // Skip chains that fail to fetch balance
+          console.error(`Failed to get balance for chain ${chainId}:`, e);
+        }
+      }
+    }
+
+    res.json({
+      hasWallet: true,
+      address,
+      balances,
+    });
+  } catch (error) {
+    console.error('Get wallet error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * DELETE /api/admin/facilitators/:id/wallet - Remove wallet
+ */
+router.delete('/facilitators/:id/wallet', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const facilitator = getFacilitatorById(req.params.id);
+    if (!facilitator) {
+      res.status(404).json({ error: 'Facilitator not found' });
+      return;
+    }
+
+    if (!facilitator.encrypted_private_key) {
+      res.status(404).json({ error: 'No wallet configured' });
+      return;
+    }
+
+    // Remove wallet
+    const updated = updateFacilitator(req.params.id, { encrypted_private_key: '' });
+    
+    if (!updated) {
+      res.status(500).json({ error: 'Failed to remove wallet' });
+      return;
+    }
+
+    res.json({ success: true, message: 'Wallet removed' });
+  } catch (error) {
+    console.error('Delete wallet error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
