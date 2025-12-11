@@ -117,8 +117,35 @@ export async function executeSolanaSettlement(
     let signature: string;
     
     if (transaction instanceof VersionedTransaction) {
-      // For versioned transactions, just send it
-      signature = await connection.sendTransaction(transaction);
+      // For versioned transactions, the facilitator may need to co-sign as fee payer
+      // Check if the facilitator is the fee payer (first static account key)
+      const message = transaction.message;
+      const staticAccountKeys = message.staticAccountKeys;
+      
+      // The fee payer is always the first account in the transaction
+      if (staticAccountKeys.length > 0) {
+        const feePayerPubkey = staticAccountKeys[0];
+        
+        // If facilitator is the fee payer, we need to sign
+        if (feePayerPubkey.equals(facilitatorKeypair.publicKey)) {
+          // Add facilitator's signature
+          transaction.sign([facilitatorKeypair]);
+        }
+      }
+      
+      // Send the transaction with skipPreflight to get better error messages
+      try {
+        signature = await connection.sendTransaction(transaction, {
+          skipPreflight: false,
+          preflightCommitment: 'confirmed',
+        });
+      } catch (e) {
+        // If simulation fails, try with skipPreflight to see if it's a preflight issue
+        console.error('Versioned transaction preflight failed:', e);
+        signature = await connection.sendTransaction(transaction, {
+          skipPreflight: true,
+        });
+      }
     } else {
       // For legacy transactions, we might need to add the facilitator as fee payer
       // Check if the transaction needs a fee payer signature
@@ -137,12 +164,12 @@ export async function executeSolanaSettlement(
         transaction.partialSign(facilitatorKeypair);
       }
       
-      signature = await sendAndConfirmTransaction(
-        connection,
-        transaction,
-        [facilitatorKeypair],
-        { skipPreflight: false }
-      );
+      // Use sendRawTransaction for pre-signed transactions
+      const rawTransaction = transaction.serialize();
+      signature = await connection.sendRawTransaction(rawTransaction, {
+        skipPreflight: false,
+        preflightCommitment: 'confirmed',
+      });
     }
 
     // Wait for confirmation
