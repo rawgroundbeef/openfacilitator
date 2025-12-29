@@ -8,6 +8,7 @@ import {
   deleteFacilitator,
 } from '../db/facilitators.js';
 import { getTransactionsByFacilitator, getTransactionStats } from '../db/transactions.js';
+import { getDatabase } from '../db/index.js';
 import { 
   defaultTokens, 
   getWalletAddress, 
@@ -1019,6 +1020,26 @@ router.get('/facilitators/:id/domain/status', requireAuth, async (req: Request, 
     });
   } catch (error) {
     console.error('Get domain status error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * DELETE /api/admin/subscriptions/clear
+ * Clear all subscriptions (temporary admin endpoint)
+ * TODO: Remove this after testing
+ */
+router.delete('/subscriptions/clear', requireAuth, (req: Request, res: Response) => {
+  try {
+    const db = getDatabase();
+    const result = db.prepare('DELETE FROM subscriptions').run();
+    console.log(`[Admin] Cleared ${result.changes} subscriptions`);
+    res.json({
+      success: true,
+      message: `Cleared ${result.changes} subscriptions`
+    });
+  } catch (error) {
+    console.error('Clear subscriptions error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
