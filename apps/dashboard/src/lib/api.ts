@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5002';
 
 export interface Facilitator {
   id: string;
@@ -74,6 +74,42 @@ export interface WalletGenerateResponse {
   success: boolean;
   address: string;
   message: string;
+}
+
+export interface BillingWallet {
+  hasWallet: boolean;
+  address: string;
+  network: string;
+  balance: string;
+  token: string;
+}
+
+export interface BillingWalletCreateResponse {
+  address: string;
+  network: string;
+  created: boolean;
+  message: string;
+}
+
+export interface SubscriptionStatus {
+  active: boolean;
+  tier: 'basic' | 'pro' | null;
+  expires: string | null;
+}
+
+export interface SubscriptionPricing {
+  basic: { price: number; priceFormatted: string; currency: string; period: string };
+  pro: { price: number; priceFormatted: string; currency: string; period: string };
+}
+
+export interface PurchaseResult {
+  success: boolean;
+  message?: string;
+  tier?: 'basic' | 'pro';
+  error?: string;
+  insufficientBalance?: boolean;
+  required?: string;
+  available?: string;
 }
 
 class ApiClient {
@@ -245,6 +281,56 @@ class ApiClient {
     return this.request(`/api/admin/facilitators/${facilitatorId}/wallet/solana`, {
       method: 'DELETE',
     });
+  }
+
+  // Billing Wallet (user's subscription wallet)
+  async getBillingWallet(): Promise<BillingWallet> {
+    return this.request('/api/admin/wallet');
+  }
+
+  async createBillingWallet(): Promise<BillingWalletCreateResponse> {
+    return this.request('/api/admin/wallet/create', {
+      method: 'POST',
+    });
+  }
+
+  // Subscription Management
+  async getSubscriptionStatus(): Promise<SubscriptionStatus> {
+    return this.request('/api/subscriptions/status');
+  }
+
+  async getSubscriptionPricing(): Promise<SubscriptionPricing> {
+    return this.request('/api/subscriptions/pricing');
+  }
+
+  async purchaseSubscription(tier: 'basic' | 'pro'): Promise<PurchaseResult> {
+    const response = await fetch(`${this.baseUrl}/api/subscriptions/purchase`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tier }),
+    });
+
+    const data = await response.json();
+
+    if (response.status === 402) {
+      return {
+        success: false,
+        insufficientBalance: true,
+        required: data.required,
+        available: data.available,
+        error: data.message || 'Insufficient balance',
+      };
+    }
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: data.error || data.message || `HTTP ${response.status}`,
+      };
+    }
+
+    return data;
   }
 }
 

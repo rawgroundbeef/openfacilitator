@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
@@ -16,6 +16,7 @@ import {
   Settings,
   ShieldCheck,
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
   Loader2,
   Wallet,
@@ -32,12 +33,14 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { api, type Transaction } from '@/lib/api';
 import { formatDate, formatAddress } from '@/lib/utils';
+import { Navbar } from '@/components/navbar';
 
 const networkNames: Record<string | number, string> = {
   8453: 'Base',
@@ -50,6 +53,7 @@ const networkNames: Record<string | number, string> = {
 
 export default function FacilitatorDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedDns, setCopiedDns] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState(false);
@@ -60,6 +64,8 @@ export default function FacilitatorDetailPage() {
   const [isChangeDomainOpen, setIsChangeDomainOpen] = useState(false);
   const [isEditInfoOpen, setIsEditInfoOpen] = useState(false);
   const [isAddDomainOpen, setIsAddDomainOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [deleteConfirmName, setDeleteConfirmName] = useState('');
   const [importPrivateKey, setImportPrivateKey] = useState('');
   const [importSolanaPrivateKey, setImportSolanaPrivateKey] = useState('');
   const [newDomain, setNewDomain] = useState('');
@@ -193,6 +199,14 @@ export default function FacilitatorDetailPage() {
     },
   });
 
+  const deleteFacilitatorMutation = useMutation({
+    mutationFn: () => api.deleteFacilitator(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['facilitators'] });
+      router.push('/dashboard');
+    },
+  });
+
   const copyToClipboard = async (text: string) => {
     await navigator.clipboard.writeText(text);
     setCopiedUrl(true);
@@ -237,28 +251,10 @@ export default function FacilitatorDetailPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-                <ShieldCheck className="w-5 h-5 text-primary-foreground" />
-              </div>
-              <span className="font-bold text-xl">OpenFacilitator</span>
-            </Link>
-            <span className="text-muted-foreground">/</span>
-            <Link href="/dashboard" className="text-muted-foreground hover:text-foreground">
-              Dashboard
-            </Link>
-            <span className="text-muted-foreground">/</span>
-            <span className="font-medium">{facilitator.name}</span>
-          </div>
-        </div>
-      </header>
+      <Navbar />
 
       {/* Main */}
-      <main className="max-w-7xl mx-auto px-6 py-10">
+      <main className="max-w-7xl mx-auto px-6 pt-24 pb-10 min-h-screen">
         {/* Back link */}
         <Link
           href="/dashboard"
@@ -1138,7 +1134,7 @@ export default function FacilitatorDetailPage() {
                       return null;
                     };
                     const explorerUrl = getExplorerUrl();
-                    
+
                     return (
                       <div
                         key={tx.id}
@@ -1201,6 +1197,96 @@ export default function FacilitatorDetailPage() {
                   })}
                 </div>
               )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Danger Zone */}
+        <div className="mt-10">
+          <Card className="border-red-500/50 dark:border-red-900/50 bg-red-500/5 dark:bg-red-950/20">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                <AlertTriangle className="w-5 h-5" />
+                Danger Zone
+              </CardTitle>
+              <CardDescription className="text-red-600/80 dark:text-red-400/80">
+                Irreversible actions for this facilitator
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <p className="font-medium">Delete this facilitator</p>
+                  <p className="text-sm text-muted-foreground">
+                    This will permanently delete this facilitator, all transaction history, and remove any custom domains. This cannot be undone.
+                  </p>
+                </div>
+                <Dialog open={isDeleteOpen} onOpenChange={(open) => {
+                  setIsDeleteOpen(open);
+                  if (!open) setDeleteConfirmName('');
+                }}>
+                  <DialogTrigger asChild>
+                    <Button variant="destructive" className="shrink-0">
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete Facilitator
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Delete {facilitator.name}?</DialogTitle>
+                      <DialogDescription>
+                        This action cannot be undone. Type the facilitator name to confirm.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4 space-y-4">
+                      <div className="p-4 rounded-lg bg-red-500/10 dark:bg-red-950/30 border border-red-500/20 dark:border-red-900/30">
+                        <p className="text-sm text-red-600 dark:text-red-400">
+                          This will permanently delete:
+                        </p>
+                        <ul className="mt-2 text-sm text-red-600/80 dark:text-red-400/80 list-disc list-inside space-y-1">
+                          <li>The facilitator configuration</li>
+                          <li>All transaction history</li>
+                          <li>Associated wallets and keys</li>
+                          <li>Custom domain settings</li>
+                        </ul>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="confirmName">
+                          Type <span className="font-mono font-semibold">{facilitator.name}</span> to confirm
+                        </Label>
+                        <Input
+                          id="confirmName"
+                          value={deleteConfirmName}
+                          onChange={(e) => setDeleteConfirmName(e.target.value)}
+                          placeholder={facilitator.name}
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        onClick={() => deleteFacilitatorMutation.mutate()}
+                        disabled={deleteConfirmName !== facilitator.name || deleteFacilitatorMutation.isPending}
+                      >
+                        {deleteFacilitatorMutation.isPending ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Deleting...
+                          </>
+                        ) : (
+                          <>
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Delete Facilitator
+                          </>
+                        )}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
             </CardContent>
           </Card>
         </div>

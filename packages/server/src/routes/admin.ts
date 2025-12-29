@@ -37,6 +37,7 @@ import {
   isRailwayConfigured 
 } from '../services/railway.js';
 import { encryptPrivateKey, decryptPrivateKey, generateWallet } from '../utils/crypto.js';
+import { generateWalletForUser, getWalletForUser, getUSDCBalance } from '../services/wallet.js';
 import type { Hex } from 'viem';
 
 const router: IRouter = Router();
@@ -100,6 +101,53 @@ router.get('/me', requireAuth, async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/admin/wallet - Get user's billing wallet info and USDC balance
+ */
+router.get('/wallet', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const wallet = getWalletForUser(req.user!.id);
+    if (!wallet) {
+      res.status(404).json({ error: 'Wallet not found', hasWallet: false });
+      return;
+    }
+
+    const { formatted } = await getUSDCBalance(wallet.address);
+
+    res.json({
+      hasWallet: true,
+      address: wallet.address,
+      network: wallet.network,
+      balance: formatted,
+      token: 'USDC',
+    });
+  } catch (error) {
+    console.error('Get wallet error:', error);
+    res.status(500).json({ error: 'Failed to get wallet info' });
+  }
+});
+
+/**
+ * POST /api/admin/wallet/create - Create billing wallet for user
+ */
+router.post('/wallet/create', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const result = await generateWalletForUser(req.user!.id);
+
+    res.json({
+      address: result.address,
+      network: 'solana',
+      created: result.created,
+      message: result.created
+        ? 'Wallet created successfully. Fund this address with USDC on Solana.'
+        : 'Wallet already exists.',
+    });
+  } catch (error) {
+    console.error('Create wallet error:', error);
+    res.status(500).json({ error: 'Failed to create wallet' });
+  }
+});
+
+/**
  * POST /api/admin/facilitators - Create a new facilitator
  */
 router.post('/facilitators', requireAuth, async (req: Request, res: Response) => {
@@ -137,6 +185,22 @@ router.post('/facilitators', requireAuth, async (req: Request, res: Response) =>
       return;
     }
 
+    // Register subdomain with Railway
+    const subdomainFull = `${subdomain}.openfacilitator.io`;
+    let railwayStatus: { success: boolean; error?: string } = { success: false };
+
+    if (isRailwayConfigured()) {
+      console.log(`Registering subdomain with Railway: ${subdomainFull}`);
+      railwayStatus = await addCustomDomain(subdomainFull);
+      if (railwayStatus.success) {
+        console.log(`Successfully registered ${subdomainFull} with Railway`);
+      } else {
+        console.error(`Failed to register ${subdomainFull} with Railway:`, railwayStatus.error);
+      }
+    } else {
+      console.log('Railway not configured, skipping subdomain registration');
+    }
+
     res.status(201).json({
       id: facilitator.id,
       name: facilitator.name,
@@ -146,6 +210,8 @@ router.post('/facilitators', requireAuth, async (req: Request, res: Response) =>
       supportedTokens: JSON.parse(facilitator.supported_tokens),
       url: `https://${facilitator.subdomain}.openfacilitator.io`,
       createdAt: formatSqliteDate(facilitator.created_at),
+      railwayRegistered: railwayStatus.success,
+      railwayError: railwayStatus.error,
     });
   } catch (error) {
     console.error('Create facilitator error:', error);
@@ -279,10 +345,30 @@ router.patch('/facilitators/:id', requireAuth, async (req: Request, res: Respons
  */
 router.delete('/facilitators/:id', requireAuth, async (req: Request, res: Response) => {
   try {
+    // Get facilitator first to know the subdomain for Railway cleanup
+    const facilitator = getFacilitatorById(req.params.id);
+    if (!facilitator) {
+      res.status(404).json({ error: 'Facilitator not found' });
+      return;
+    }
+
     const deleted = deleteFacilitator(req.params.id);
     if (!deleted) {
       res.status(404).json({ error: 'Facilitator not found' });
       return;
+    }
+
+    // Remove subdomain from Railway
+    if (isRailwayConfigured()) {
+      const subdomainFull = `${facilitator.subdomain}.openfacilitator.io`;
+      console.log(`Removing subdomain from Railway: ${subdomainFull}`);
+      const result = await removeCustomDomain(subdomainFull);
+      if (result.success) {
+        console.log(`Successfully removed ${subdomainFull} from Railway`);
+      } else {
+        // Log but don't fail the delete - the facilitator is already deleted
+        console.error(`Failed to remove ${subdomainFull} from Railway:`, result.error);
+      }
     }
 
     res.status(204).send();

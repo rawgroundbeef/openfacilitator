@@ -5,6 +5,17 @@ import type { ChainConfig } from './types.js';
  * RPC URLs can be overridden via environment variables
  */
 export const defaultChains: Record<string, ChainConfig> = {
+  // ===== MAINNETS =====
+  
+  // Avalanche C-Chain
+  '43114': {
+    chainId: 43114,
+    name: 'Avalanche',
+    network: 'avalanche',
+    rpcUrl: process.env.AVALANCHE_RPC_URL || 'https://api.avax.network/ext/bc/C/rpc',
+    blockExplorerUrl: 'https://snowtrace.io',
+    isEVM: true,
+  },
   // Base Mainnet
   '8453': {
     chainId: 8453,
@@ -14,31 +25,58 @@ export const defaultChains: Record<string, ChainConfig> = {
     blockExplorerUrl: 'https://basescan.org',
     isEVM: true,
   },
-  // Base Sepolia (Testnet)
-  '84532': {
-    chainId: 84532,
-    name: 'Base Sepolia',
-    network: 'base-sepolia',
-    rpcUrl: 'https://sepolia.base.org',
-    blockExplorerUrl: 'https://sepolia.basescan.org',
-    isEVM: true,
-  },
   // Ethereum Mainnet
   '1': {
     chainId: 1,
     name: 'Ethereum',
     network: 'ethereum',
-    rpcUrl: 'https://eth.llamarpc.com',
+    rpcUrl: process.env.ETHEREUM_RPC_URL || 'https://eth.llamarpc.com',
     blockExplorerUrl: 'https://etherscan.io',
     isEVM: true,
   },
-  // Sepolia Testnet
-  '11155111': {
-    chainId: 11155111,
-    name: 'Sepolia',
-    network: 'sepolia',
-    rpcUrl: 'https://rpc.sepolia.org',
-    blockExplorerUrl: 'https://sepolia.etherscan.io',
+  // IoTeX Mainnet
+  '4689': {
+    chainId: 4689,
+    name: 'IoTeX',
+    network: 'iotex',
+    rpcUrl: process.env.IOTEX_RPC_URL || 'https://babel-api.mainnet.iotex.io',
+    blockExplorerUrl: 'https://iotexscan.io',
+    isEVM: true,
+  },
+  // Peaq Mainnet
+  '3338': {
+    chainId: 3338,
+    name: 'Peaq',
+    network: 'peaq',
+    rpcUrl: process.env.PEAQ_RPC_URL || 'https://peaq.api.onfinality.io/public',
+    blockExplorerUrl: 'https://peaq.subscan.io',
+    isEVM: true,
+  },
+  // Polygon Mainnet
+  '137': {
+    chainId: 137,
+    name: 'Polygon',
+    network: 'polygon',
+    rpcUrl: process.env.POLYGON_RPC_URL || 'https://polygon-rpc.com',
+    blockExplorerUrl: 'https://polygonscan.com',
+    isEVM: true,
+  },
+  // Sei Mainnet (Pacific-1)
+  '1329': {
+    chainId: 1329,
+    name: 'Sei',
+    network: 'sei',
+    rpcUrl: process.env.SEI_RPC_URL || 'https://evm-rpc.sei-apis.com',
+    blockExplorerUrl: 'https://seitrace.com',
+    isEVM: true,
+  },
+  // XLayer Mainnet (OKX)
+  '196': {
+    chainId: 196,
+    name: 'XLayer',
+    network: 'xlayer',
+    rpcUrl: process.env.XLAYER_RPC_URL || 'https://rpc.xlayer.tech',
+    blockExplorerUrl: 'https://www.okx.com/explorer/xlayer',
     isEVM: true,
   },
   // Solana Mainnet
@@ -46,16 +84,73 @@ export const defaultChains: Record<string, ChainConfig> = {
     chainId: 'solana',
     name: 'Solana',
     network: 'solana',
-    rpcUrl: 'https://api.mainnet-beta.solana.com',
+    rpcUrl: process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com',
     blockExplorerUrl: 'https://solscan.io',
     isEVM: false,
+  },
+
+  // ===== TESTNETS =====
+  
+  // Avalanche Fuji Testnet
+  '43113': {
+    chainId: 43113,
+    name: 'Avalanche Fuji',
+    network: 'avalanche-fuji',
+    rpcUrl: process.env.AVALANCHE_FUJI_RPC_URL || 'https://api.avax-test.network/ext/bc/C/rpc',
+    blockExplorerUrl: 'https://testnet.snowtrace.io',
+    isEVM: true,
+  },
+  // Base Sepolia (Testnet)
+  '84532': {
+    chainId: 84532,
+    name: 'Base Sepolia',
+    network: 'base-sepolia',
+    rpcUrl: process.env.BASE_SEPOLIA_RPC_URL || 'https://sepolia.base.org',
+    blockExplorerUrl: 'https://sepolia.basescan.org',
+    isEVM: true,
+  },
+  // Polygon Amoy Testnet
+  '80002': {
+    chainId: 80002,
+    name: 'Polygon Amoy',
+    network: 'polygon-amoy',
+    rpcUrl: process.env.POLYGON_AMOY_RPC_URL || 'https://rpc-amoy.polygon.technology',
+    blockExplorerUrl: 'https://amoy.polygonscan.com',
+    isEVM: true,
+  },
+  // Sei Testnet (Atlantic-2)
+  '1328': {
+    chainId: 1328,
+    name: 'Sei Testnet',
+    network: 'sei-testnet',
+    rpcUrl: process.env.SEI_TESTNET_RPC_URL || 'https://evm-rpc-testnet.sei-apis.com',
+    blockExplorerUrl: 'https://testnet.seitrace.com',
+    isEVM: true,
+  },
+  // Sepolia Testnet
+  '11155111': {
+    chainId: 11155111,
+    name: 'Sepolia',
+    network: 'sepolia',
+    rpcUrl: process.env.SEPOLIA_RPC_URL || 'https://rpc.sepolia.org',
+    blockExplorerUrl: 'https://sepolia.etherscan.io',
+    isEVM: true,
+  },
+  // XLayer Testnet
+  '195': {
+    chainId: 195,
+    name: 'XLayer Testnet',
+    network: 'xlayer-testnet',
+    rpcUrl: process.env.XLAYER_TESTNET_RPC_URL || 'https://testrpc.xlayer.tech',
+    blockExplorerUrl: 'https://www.okx.com/explorer/xlayer-test',
+    isEVM: true,
   },
   // Solana Devnet
   'solana-devnet': {
     chainId: 'solana-devnet',
     name: 'Solana Devnet',
     network: 'solana-devnet',
-    rpcUrl: 'https://api.devnet.solana.com',
+    rpcUrl: process.env.SOLANA_DEVNET_RPC_URL || 'https://api.devnet.solana.com',
     blockExplorerUrl: 'https://solscan.io/?cluster=devnet',
     isEVM: false,
   },
@@ -87,12 +182,24 @@ export function isChainSupported(chainIdOrNetwork: number | string): boolean {
  * Network name to chain ID mapping
  */
 export const networkToChainId: Record<string, number | string> = {
+  // Mainnets
+  avalanche: 43114,
   base: 8453,
-  'base-sepolia': 84532,
   ethereum: 1,
-  sepolia: 11155111,
+  iotex: 4689,
+  peaq: 3338,
+  polygon: 137,
+  sei: 1329,
+  xlayer: 196,
   solana: 'solana',
   'solana-mainnet': 'solana', // Alias for compatibility
+  // Testnets
+  'avalanche-fuji': 43113,
+  'base-sepolia': 84532,
+  'polygon-amoy': 80002,
+  'sei-testnet': 1328,
+  sepolia: 11155111,
+  'xlayer-testnet': 195,
   'solana-devnet': 'solana-devnet',
 };
 
@@ -100,12 +207,24 @@ export const networkToChainId: Record<string, number | string> = {
  * Chain ID to network name mapping
  */
 export const chainIdToNetwork: Record<string | number, string> = {
+  // Mainnets
+  43114: 'avalanche',
   8453: 'base',
-  84532: 'base-sepolia',
   1: 'ethereum',
-  11155111: 'sepolia',
+  4689: 'iotex',
+  3338: 'peaq',
+  137: 'polygon',
+  1329: 'sei',
+  196: 'xlayer',
   solana: 'solana',
   'solana-mainnet': 'solana', // Alias
+  // Testnets
+  43113: 'avalanche-fuji',
+  84532: 'base-sepolia',
+  80002: 'polygon-amoy',
+  1328: 'sei-testnet',
+  11155111: 'sepolia',
+  195: 'xlayer-testnet',
   'solana-devnet': 'solana-devnet',
 };
 
@@ -126,9 +245,27 @@ export function getNetworkFromChainId(chainId: number | string): string | undefi
 /**
  * Production chains (mainnet only)
  */
-export const productionChains = [8453, 'solana'] as const;
+export const productionChains = [
+  43114, // Avalanche
+  8453,  // Base
+  1,     // Ethereum
+  4689,  // IoTeX
+  3338,  // Peaq
+  137,   // Polygon
+  1329,  // Sei
+  196,   // XLayer
+  'solana',
+] as const;
 
 /**
  * Test chains
  */
-export const testChains = [84532, 11155111, 'solana-devnet'] as const;
+export const testChains = [
+  43113,    // Avalanche Fuji
+  84532,    // Base Sepolia
+  80002,    // Polygon Amoy
+  1328,     // Sei Testnet
+  11155111, // Sepolia
+  195,      // XLayer Testnet
+  'solana-devnet',
+] as const;

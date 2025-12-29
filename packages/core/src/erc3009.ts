@@ -10,11 +10,22 @@ import {
   http,
   type Address,
   type Hex,
+  type Chain,
   encodeFunctionData,
   parseSignature,
+  defineChain,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { base, baseSepolia, mainnet, sepolia } from 'viem/chains';
+import { 
+  avalanche, 
+  avalancheFuji,
+  base, 
+  baseSepolia, 
+  mainnet, 
+  polygon,
+  polygonAmoy,
+  sepolia,
+} from 'viem/chains';
 
 /**
  * ERC-3009 transferWithAuthorization ABI
@@ -43,14 +54,79 @@ const TRANSFER_WITH_AUTHORIZATION_ABI = [
 ] as const;
 
 /**
+ * Custom chain definitions for chains not in viem
+ */
+const iotex = defineChain({
+  id: 4689,
+  name: 'IoTeX',
+  nativeCurrency: { name: 'IOTX', symbol: 'IOTX', decimals: 18 },
+  rpcUrls: { default: { http: ['https://babel-api.mainnet.iotex.io'] } },
+  blockExplorers: { default: { name: 'IoTeXScan', url: 'https://iotexscan.io' } },
+});
+
+const peaq = defineChain({
+  id: 3338,
+  name: 'Peaq',
+  nativeCurrency: { name: 'PEAQ', symbol: 'PEAQ', decimals: 18 },
+  rpcUrls: { default: { http: ['https://peaq.api.onfinality.io/public'] } },
+  blockExplorers: { default: { name: 'Subscan', url: 'https://peaq.subscan.io' } },
+});
+
+const sei = defineChain({
+  id: 1329,
+  name: 'Sei',
+  nativeCurrency: { name: 'SEI', symbol: 'SEI', decimals: 18 },
+  rpcUrls: { default: { http: ['https://evm-rpc.sei-apis.com'] } },
+  blockExplorers: { default: { name: 'SeiTrace', url: 'https://seitrace.com' } },
+});
+
+const seiTestnet = defineChain({
+  id: 1328,
+  name: 'Sei Testnet',
+  nativeCurrency: { name: 'SEI', symbol: 'SEI', decimals: 18 },
+  rpcUrls: { default: { http: ['https://evm-rpc-testnet.sei-apis.com'] } },
+  blockExplorers: { default: { name: 'SeiTrace Testnet', url: 'https://testnet.seitrace.com' } },
+  testnet: true,
+});
+
+const xlayer = defineChain({
+  id: 196,
+  name: 'XLayer',
+  nativeCurrency: { name: 'OKB', symbol: 'OKB', decimals: 18 },
+  rpcUrls: { default: { http: ['https://rpc.xlayer.tech'] } },
+  blockExplorers: { default: { name: 'OKX Explorer', url: 'https://www.okx.com/explorer/xlayer' } },
+});
+
+const xlayerTestnet = defineChain({
+  id: 195,
+  name: 'XLayer Testnet',
+  nativeCurrency: { name: 'OKB', symbol: 'OKB', decimals: 18 },
+  rpcUrls: { default: { http: ['https://testrpc.xlayer.tech'] } },
+  blockExplorers: { default: { name: 'OKX Explorer', url: 'https://www.okx.com/explorer/xlayer-test' } },
+  testnet: true,
+});
+
+/**
  * Chain configuration for settlement
  */
-const chainConfigs = {
-  8453: { chain: base, rpcUrl: 'https://mainnet.base.org' },
-  84532: { chain: baseSepolia, rpcUrl: 'https://sepolia.base.org' },
-  1: { chain: mainnet, rpcUrl: 'https://eth.llamarpc.com' },
-  11155111: { chain: sepolia, rpcUrl: 'https://rpc.sepolia.org' },
-} as const;
+const chainConfigs: Record<number, { chain: Chain; rpcUrl: string }> = {
+  // Mainnets
+  43114: { chain: avalanche, rpcUrl: process.env.AVALANCHE_RPC_URL || 'https://api.avax.network/ext/bc/C/rpc' },
+  8453: { chain: base, rpcUrl: process.env.BASE_RPC_URL || 'https://mainnet.base.org' },
+  1: { chain: mainnet, rpcUrl: process.env.ETHEREUM_RPC_URL || 'https://eth.llamarpc.com' },
+  4689: { chain: iotex, rpcUrl: process.env.IOTEX_RPC_URL || 'https://babel-api.mainnet.iotex.io' },
+  3338: { chain: peaq, rpcUrl: process.env.PEAQ_RPC_URL || 'https://peaq.api.onfinality.io/public' },
+  137: { chain: polygon, rpcUrl: process.env.POLYGON_RPC_URL || 'https://polygon-rpc.com' },
+  1329: { chain: sei, rpcUrl: process.env.SEI_RPC_URL || 'https://evm-rpc.sei-apis.com' },
+  196: { chain: xlayer, rpcUrl: process.env.XLAYER_RPC_URL || 'https://rpc.xlayer.tech' },
+  // Testnets
+  43113: { chain: avalancheFuji, rpcUrl: process.env.AVALANCHE_FUJI_RPC_URL || 'https://api.avax-test.network/ext/bc/C/rpc' },
+  84532: { chain: baseSepolia, rpcUrl: process.env.BASE_SEPOLIA_RPC_URL || 'https://sepolia.base.org' },
+  80002: { chain: polygonAmoy, rpcUrl: process.env.POLYGON_AMOY_RPC_URL || 'https://rpc-amoy.polygon.technology' },
+  1328: { chain: seiTestnet, rpcUrl: process.env.SEI_TESTNET_RPC_URL || 'https://evm-rpc-testnet.sei-apis.com' },
+  11155111: { chain: sepolia, rpcUrl: process.env.SEPOLIA_RPC_URL || 'https://rpc.sepolia.org' },
+  195: { chain: xlayerTestnet, rpcUrl: process.env.XLAYER_TESTNET_RPC_URL || 'https://testrpc.xlayer.tech' },
+};
 
 export interface ERC3009Authorization {
   from: Address;
@@ -96,7 +172,7 @@ export async function executeERC3009Settlement(
   });
 
   // Get chain config
-  const config = chainConfigs[chainId as keyof typeof chainConfigs];
+  const config = chainConfigs[chainId];
   if (!config) {
     return {
       success: false,
@@ -228,7 +304,7 @@ export async function getWalletBalance(
   chainId: number,
   address: Address
 ): Promise<{ balance: bigint; formatted: string }> {
-  const config = chainConfigs[chainId as keyof typeof chainConfigs];
+  const config = chainConfigs[chainId];
   if (!config) {
     throw new Error(`Unsupported chain ID: ${chainId}`);
   }

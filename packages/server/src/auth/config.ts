@@ -2,6 +2,7 @@ import { betterAuth, type BetterAuthOptions } from 'better-auth';
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
+import { generateWalletForUser } from '../services/wallet.js';
 
 const dbPath = process.env.DATABASE_PATH || './data/openfacilitator.db';
 
@@ -22,7 +23,7 @@ function getTrustedOrigins(): string[] {
     // Development
     'http://localhost:3000',
     'http://localhost:3002',
-    'http://localhost:3003',
+    'http://localhost:5001',
     // Production
     'https://openfacilitator.io',
     'https://www.openfacilitator.io',
@@ -41,7 +42,7 @@ function getTrustedOrigins(): string[] {
 export const auth = betterAuth({
   database: db,
   secret: process.env.BETTER_AUTH_SECRET,
-  baseURL: process.env.BETTER_AUTH_URL || 'http://localhost:3001',
+  baseURL: process.env.BETTER_AUTH_URL || 'http://localhost:5002',
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: false,
@@ -55,6 +56,23 @@ export const auth = betterAuth({
     },
   },
   trustedOrigins: getTrustedOrigins(),
+  databaseHooks: {
+    user: {
+      create: {
+        after: async (user) => {
+          // Auto-generate billing wallet for new users
+          try {
+            await generateWalletForUser(user.id);
+            console.log(`Created billing wallet for user ${user.id}`);
+          } catch (error) {
+            // Don't fail signup if wallet creation fails
+            // User can create wallet later via API
+            console.error(`Failed to create wallet for user ${user.id}:`, error);
+          }
+        },
+      },
+    },
+  },
 });
 
 export default auth;

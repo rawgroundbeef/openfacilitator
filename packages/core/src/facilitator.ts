@@ -1,5 +1,14 @@
-import { createPublicClient, http, type Hex, type Address } from 'viem';
-import { base, baseSepolia, mainnet, sepolia } from 'viem/chains';
+import { createPublicClient, http, type Hex, type Address, type Chain, defineChain } from 'viem';
+import { 
+  avalanche, 
+  avalancheFuji,
+  base, 
+  baseSepolia, 
+  mainnet, 
+  polygon,
+  polygonAmoy,
+  sepolia,
+} from 'viem/chains';
 import type {
   FacilitatorConfig,
   PaymentRequirements,
@@ -15,14 +24,79 @@ import { executeERC3009Settlement } from './erc3009.js';
 import { executeSolanaSettlement } from './solana.js';
 
 /**
+ * Custom chain definitions for chains not in viem
+ */
+const iotex = defineChain({
+  id: 4689,
+  name: 'IoTeX',
+  nativeCurrency: { name: 'IOTX', symbol: 'IOTX', decimals: 18 },
+  rpcUrls: { default: { http: ['https://babel-api.mainnet.iotex.io'] } },
+  blockExplorers: { default: { name: 'IoTeXScan', url: 'https://iotexscan.io' } },
+});
+
+const peaq = defineChain({
+  id: 3338,
+  name: 'Peaq',
+  nativeCurrency: { name: 'PEAQ', symbol: 'PEAQ', decimals: 18 },
+  rpcUrls: { default: { http: ['https://peaq.api.onfinality.io/public'] } },
+  blockExplorers: { default: { name: 'Subscan', url: 'https://peaq.subscan.io' } },
+});
+
+const sei = defineChain({
+  id: 1329,
+  name: 'Sei',
+  nativeCurrency: { name: 'SEI', symbol: 'SEI', decimals: 18 },
+  rpcUrls: { default: { http: ['https://evm-rpc.sei-apis.com'] } },
+  blockExplorers: { default: { name: 'SeiTrace', url: 'https://seitrace.com' } },
+});
+
+const seiTestnet = defineChain({
+  id: 1328,
+  name: 'Sei Testnet',
+  nativeCurrency: { name: 'SEI', symbol: 'SEI', decimals: 18 },
+  rpcUrls: { default: { http: ['https://evm-rpc-testnet.sei-apis.com'] } },
+  blockExplorers: { default: { name: 'SeiTrace Testnet', url: 'https://testnet.seitrace.com' } },
+  testnet: true,
+});
+
+const xlayer = defineChain({
+  id: 196,
+  name: 'XLayer',
+  nativeCurrency: { name: 'OKB', symbol: 'OKB', decimals: 18 },
+  rpcUrls: { default: { http: ['https://rpc.xlayer.tech'] } },
+  blockExplorers: { default: { name: 'OKX Explorer', url: 'https://www.okx.com/explorer/xlayer' } },
+});
+
+const xlayerTestnet = defineChain({
+  id: 195,
+  name: 'XLayer Testnet',
+  nativeCurrency: { name: 'OKB', symbol: 'OKB', decimals: 18 },
+  rpcUrls: { default: { http: ['https://testrpc.xlayer.tech'] } },
+  blockExplorers: { default: { name: 'OKX Explorer', url: 'https://www.okx.com/explorer/xlayer-test' } },
+  testnet: true,
+});
+
+/**
  * Chain ID to viem chain mapping (EVM chains only)
  */
-const viemChains = {
+const viemChains: Record<number, Chain> = {
+  // Mainnets
+  43114: avalanche,
   8453: base,
-  84532: baseSepolia,
   1: mainnet,
+  4689: iotex,
+  3338: peaq,
+  137: polygon,
+  1329: sei,
+  196: xlayer,
+  // Testnets
+  43113: avalancheFuji,
+  84532: baseSepolia,
+  80002: polygonAmoy,
+  1328: seiTestnet,
   11155111: sepolia,
-} as const;
+  195: xlayerTestnet,
+};
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyPublicClient = ReturnType<typeof createPublicClient<any, any>>;
@@ -54,7 +128,7 @@ export class Facilitator {
       // Only initialize clients for EVM chains
       if (!isEVMChain(chainId)) continue;
 
-      const chain = viemChains[chainId as keyof typeof viemChains];
+      const chain = viemChains[chainId];
       const chainConfig = defaultChains[String(chainId)];
 
       if (chain && chainConfig) {

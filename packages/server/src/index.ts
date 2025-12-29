@@ -3,7 +3,7 @@ import { createServer } from './server.js';
 import { initializeDatabase } from './db/index.js';
 import { initializeAuth } from './auth/index.js';
 
-const PORT = parseInt(process.env.PORT || '3001', 10);
+const PORT = parseInt(process.env.PORT || '5002', 10);
 const HOST = process.env.HOST || '0.0.0.0';
 const DATABASE_PATH = process.env.DATABASE_PATH || './data/openfacilitator.db';
 

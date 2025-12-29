@@ -7,15 +7,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Plus,
   ExternalLink,
-  Trash2,
   Settings,
   ShieldCheck,
   Activity,
-  Globe,
   Copy,
   Check,
-  Download,
-  LogOut,
+  Sparkles,
+  Crown,
+  Loader2,
+  Wallet,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,10 +33,13 @@ import {
 import { api, type Facilitator } from '@/lib/api';
 import { formatDate, formatAddress } from '@/lib/utils';
 import { useAuth } from '@/components/auth/auth-provider';
+import { Navbar } from '@/components/navbar';
+import { useToast } from '@/hooks/use-toast';
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, isLoading: authLoading, isAuthenticated, signOut } = useAuth();
+  const { isLoading: authLoading, isAuthenticated, user } = useAuth();
+  const { toast } = useToast();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [domainType, setDomainType] = useState<'subdomain' | 'custom'>('subdomain');
   const [newFacilitator, setNewFacilitator] = useState({
@@ -45,6 +48,7 @@ export default function DashboardPage() {
     customDomain: '',
   });
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [purchasingTier, setPurchasingTier] = useState<'basic' | 'pro' | null>(null);
   const queryClient = useQueryClient();
 
   // Redirect to signin if not authenticated
@@ -60,6 +64,58 @@ export default function DashboardPage() {
     enabled: isAuthenticated,
   });
 
+  const { data: subscription } = useQuery({
+    queryKey: ['subscription'],
+    queryFn: () => api.getSubscriptionStatus(),
+    enabled: isAuthenticated,
+  });
+
+  const { data: billingWallet } = useQuery({
+    queryKey: ['billingWallet'],
+    queryFn: () => api.getBillingWallet(),
+    enabled: isAuthenticated,
+  });
+
+  const purchaseMutation = useMutation({
+    mutationFn: (tier: 'basic' | 'pro') => api.purchaseSubscription(tier),
+    onSuccess: (result) => {
+      if (result.success) {
+        toast({
+          title: 'Subscription activated!',
+          description: `Your ${result.tier} subscription is now active.`,
+        });
+        queryClient.invalidateQueries({ queryKey: ['subscription'] });
+        queryClient.invalidateQueries({ queryKey: ['billingWallet'] });
+      } else if (result.insufficientBalance) {
+        toast({
+          title: 'Insufficient balance',
+          description: `You need $${result.required} USDC but only have $${result.available}. Fund your billing wallet first.`,
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Purchase failed',
+          description: result.error || 'Something went wrong',
+          variant: 'destructive',
+        });
+      }
+      setPurchasingTier(null);
+    },
+    onError: (error) => {
+      toast({
+        title: 'Purchase failed',
+        description: error instanceof Error ? error.message : 'Something went wrong',
+        variant: 'destructive',
+      });
+      setPurchasingTier(null);
+    },
+  });
+
+  const handlePurchase = (tier: 'basic' | 'pro') => {
+    setPurchasingTier(tier);
+    purchaseMutation.mutate(tier);
+  };
+
   const createMutation = useMutation({
     mutationFn: (data: { name: string; subdomain: string; customDomain?: string }) =>
       api.createFacilitator(data),
@@ -68,13 +124,6 @@ export default function DashboardPage() {
       setIsCreateOpen(false);
       setNewFacilitator({ name: '', subdomain: '', customDomain: '' });
       setDomainType('subdomain');
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.deleteFacilitator(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['facilitators'] });
     },
   });
 
@@ -99,32 +148,10 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-                <ShieldCheck className="w-5 h-5 text-primary-foreground" />
-              </div>
-              <span className="font-bold text-xl">OpenFacilitator</span>
-            </Link>
-            <span className="text-muted-foreground">/</span>
-            <span className="text-muted-foreground">Dashboard</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-muted-foreground">
-              {user?.email}
-            </span>
-            <Button variant="ghost" size="icon" onClick={signOut} title="Sign out">
-              <LogOut className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-      </header>
+      <Navbar />
 
       {/* Main */}
-      <main className="max-w-7xl mx-auto px-6 py-10">
+      <main className="max-w-7xl mx-auto px-6 pt-24 pb-10 min-h-screen">
         {/* Stats */}
         <div className="grid sm:grid-cols-3 gap-6 mb-10">
           <Card>
@@ -151,16 +178,120 @@ export default function DashboardPage() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className={subscription?.tier === 'pro' ? 'border-primary/50' : ''}>
             <CardHeader className="pb-2">
               <CardDescription>Current Plan</CardDescription>
-              <CardTitle className="text-3xl">Starter</CardTitle>
+              <CardTitle className="text-3xl flex items-center gap-2">
+                {subscription?.active ? (
+                  <>
+                    {subscription.tier === 'pro' ? (
+                      <>
+                        <Crown className="w-6 h-6 text-primary" />
+                        Pro
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-6 h-6 text-primary" />
+                        Basic
+                      </>
+                    )}
+                  </>
+                ) : (
+                  'Free'
+                )}
+              </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-1 text-xs text-primary">
-                <Globe className="w-3 h-3" />
-                Subdomain included
-              </div>
+            <CardContent className="space-y-3">
+              {/* Wallet Balance */}
+              {billingWallet?.hasWallet && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Wallet className="w-3 h-3" />
+                  <span>Balance: ${billingWallet.balance} USDC</span>
+                </div>
+              )}
+
+              {subscription?.active ? (
+                <>
+                  <div className="text-xs text-muted-foreground">
+                    Expires {subscription.expires ? formatDate(subscription.expires) : 'N/A'}
+                  </div>
+                  {subscription.tier === 'basic' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs h-7"
+                      onClick={() => handlePurchase('pro')}
+                      disabled={purchasingTier !== null}
+                    >
+                      {purchasingTier === 'pro' ? (
+                        <>
+                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                          Upgrading...
+                        </>
+                      ) : (
+                        'Upgrade to Pro $25'
+                      )}
+                    </Button>
+                  )}
+                  {subscription.tier === 'pro' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs h-7"
+                      onClick={() => handlePurchase('pro')}
+                      disabled={purchasingTier !== null}
+                    >
+                      {purchasingTier === 'pro' ? (
+                        <>
+                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                          Renewing...
+                        </>
+                      ) : (
+                        'Renew $25'
+                      )}
+                    </Button>
+                  )}
+                </>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <div className="text-xs text-muted-foreground">
+                    Upgrade to create facilitators
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      className="text-xs h-7"
+                      onClick={() => handlePurchase('basic')}
+                      disabled={purchasingTier !== null}
+                    >
+                      {purchasingTier === 'basic' ? (
+                        <>
+                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        'Basic $5/mo'
+                      )}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs h-7"
+                      onClick={() => handlePurchase('pro')}
+                      disabled={purchasingTier !== null}
+                    >
+                      {purchasingTier === 'pro' ? (
+                        <>
+                          <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        'Pro $25/mo'
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -396,14 +527,6 @@ export default function DashboardPage() {
                         <a href={facilitator.url} target="_blank" rel="noopener noreferrer">
                           <ExternalLink className="w-4 h-4" />
                         </a>
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => deleteMutation.mutate(facilitator.id)}
-                        disabled={deleteMutation.isPending}
-                      >
-                        <Trash2 className="w-4 h-4 text-destructive" />
                       </Button>
                     </div>
                   </div>

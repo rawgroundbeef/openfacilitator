@@ -1,10 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, ShieldCheck, Globe, Key, Terminal, Github, Check, Copy, Zap, Code, Server, Sparkles } from 'lucide-react';
+import { ArrowRight, Globe, Github, Check, Copy, Zap, Code, Sparkles, ShieldCheck, Loader2, Wallet } from 'lucide-react';
 import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Navbar } from '@/components/navbar';
+import { useAuth } from '@/components/auth/auth-provider';
+import { useToast } from '@/hooks/use-toast';
+import { api } from '@/lib/api';
 
-const FREE_ENDPOINT = 'https://api.openfacilitator.io/free';
+const FREE_ENDPOINT = 'https://x402.openfacilitator.io';
 
 function CopyButton({ text, label }: { text: string; label?: string }) {
   const [copied, setCopied] = useState(false);
@@ -18,137 +23,138 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary transition-colors text-sm font-medium"
+      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground transition-colors font-medium"
     >
-      {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-      {label || (copied ? 'Copied!' : 'Copy')}
+      {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
+      {label || (copied ? 'Copied!' : 'Copy URL')}
     </button>
   );
 }
 
-export default function Home() {
-  return (
-    <div className="min-h-screen bg-grid">
-      {/* Navigation */}
-      <nav className="fixed top-0 w-full z-50 border-b border-border/50 backdrop-blur-xl bg-background/80">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
-              <ShieldCheck className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <span className="font-bold text-xl tracking-tight">OpenFacilitator</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link href="/docs" className="text-muted-foreground hover:text-foreground transition-colors font-medium">
-              Docs
-            </Link>
-            <Link href="https://github.com/rawgroundbeef/openfacilitator" className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-2">
-              <Github className="w-5 h-5" />
-              <span className="hidden sm:inline">GitHub</span>
-            </Link>
-            <Link
-              href="/auth/signin"
-              className="text-muted-foreground hover:text-foreground transition-colors font-medium"
-            >
-              Sign In
-            </Link>
-            <Link
-              href="/auth/signup"
-              className="px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium hover:bg-primary/90 transition-colors"
-            >
-              Dashboard
-            </Link>
-          </div>
-        </div>
-      </nav>
+function PricingButton({
+  tier,
+  className,
+  isPurchasing,
+  onPurchase,
+}: {
+  tier: 'basic' | 'pro';
+  className?: string;
+  isPurchasing: boolean;
+  onPurchase: (tier: 'basic' | 'pro') => void;
+}) {
+  const { isAuthenticated } = useAuth();
 
-      {/* Hero - FREE FIRST */}
-      <section className="pt-32 pb-12 px-6">
+  if (isAuthenticated) {
+    return (
+      <button
+        onClick={() => onPurchase(tier)}
+        disabled={isPurchasing}
+        className={`${className} disabled:opacity-50 disabled:cursor-not-allowed`}
+      >
+        {isPurchasing ? (
+          <span className="inline-flex items-center justify-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Processing...
+          </span>
+        ) : (
+          'Get Started'
+        )}
+      </button>
+    );
+  }
+
+  // Not logged in - go to sign in
+  return (
+    <Link href="/auth/signin" className={className}>
+      Sign in to subscribe
+    </Link>
+  );
+}
+
+export default function Home() {
+  const { isAuthenticated } = useAuth();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [purchasingTier, setPurchasingTier] = useState<'basic' | 'pro' | null>(null);
+
+  const { data: billingWallet } = useQuery({
+    queryKey: ['billingWallet'],
+    queryFn: () => api.getBillingWallet(),
+    enabled: isAuthenticated,
+  });
+
+  const purchaseMutation = useMutation({
+    mutationFn: (tier: 'basic' | 'pro') => api.purchaseSubscription(tier),
+    onSuccess: (result) => {
+      if (result.success) {
+        toast({
+          title: 'Subscription activated!',
+          description: `Your ${result.tier} subscription is now active.`,
+        });
+        queryClient.invalidateQueries({ queryKey: ['subscription'] });
+        queryClient.invalidateQueries({ queryKey: ['billingWallet'] });
+      } else if (result.insufficientBalance) {
+        toast({
+          title: 'Insufficient balance',
+          description: `You need $${result.required} USDC but only have $${result.available}. Fund your billing wallet first.`,
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Purchase failed',
+          description: result.error || 'Something went wrong',
+          variant: 'destructive',
+        });
+      }
+      setPurchasingTier(null);
+    },
+    onError: (error) => {
+      toast({
+        title: 'Purchase failed',
+        description: error instanceof Error ? error.message : 'Something went wrong',
+        variant: 'destructive',
+      });
+      setPurchasingTier(null);
+    },
+  });
+
+  const handlePurchase = (tier: 'basic' | 'pro') => {
+    setPurchasingTier(tier);
+    purchaseMutation.mutate(tier);
+  };
+
+  const scrollTo = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  return (
+    <div className="min-h-screen bg-grid scroll-smooth">
+      <Navbar />
+
+      {/* Hero */}
+      <section className="pt-32 pb-20 px-6">
         <div className="max-w-4xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 mb-8">
-            <Zap className="w-4 h-4" />
-            <span className="text-sm font-bold">100% Free • No Account Required</span>
-          </div>
           <h1 className="text-5xl sm:text-7xl font-bold tracking-tight mb-6 text-foreground">
-            Accept <span className="gradient-text">x402 payments</span> in 30 seconds
+            Launch <span className="text-primary">your own</span> <span className="whitespace-nowrap">x402 facilitator</span>
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-10">
-            Just use our free facilitator endpoint. No signup, no API keys, no setup.
-            Copy the URL and start accepting payments.
+            Start free. Add your brand when you&apos;re ready.
           </p>
-        </div>
-      </section>
-
-      {/* The Magic URL */}
-      <section className="pb-20 px-6">
-        <div className="max-w-3xl mx-auto">
-          <div className="relative rounded-2xl bg-background border-2 border-primary shadow-xl shadow-primary/10 p-8">
-            <div className="absolute -top-3 left-6 px-3 py-1 rounded-full bg-primary text-primary-foreground text-xs font-bold">
-              FREE ENDPOINT
-            </div>
-            
-            <div className="mb-6">
-              <p className="text-sm text-muted-foreground mb-3">Your facilitator URL:</p>
-              <div className="flex items-center gap-3 p-4 rounded-xl bg-secondary/50 border border-border font-mono text-lg break-all">
-                <span className="text-primary flex-1">{FREE_ENDPOINT}</span>
-                <CopyButton text={FREE_ENDPOINT} />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-4 text-center text-sm">
-              <div className="p-3 rounded-lg bg-secondary/30">
-                <div className="font-semibold text-foreground">Base</div>
-                <div className="text-muted-foreground">Mainnet</div>
-              </div>
-              <div className="p-3 rounded-lg bg-secondary/30">
-                <div className="font-semibold text-foreground">Solana</div>
-                <div className="text-muted-foreground">Mainnet</div>
-              </div>
-              <div className="p-3 rounded-lg bg-secondary/30">
-                <div className="font-semibold text-foreground">USDC</div>
-                <div className="text-muted-foreground">Supported</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Quick code example */}
-          <div className="mt-8 rounded-xl bg-[#0d1117] border border-border overflow-hidden">
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-border bg-[#161b22]">
-              <div className="flex gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-[#ff5f56]"></div>
-                <div className="w-3 h-3 rounded-full bg-[#ffbd2e]"></div>
-                <div className="w-3 h-3 rounded-full bg-[#27ca40]"></div>
-              </div>
-              <span className="text-xs text-muted-foreground ml-2">example.ts</span>
-            </div>
-            <pre className="p-4 text-sm overflow-x-auto">
-              <code className="text-[#c9d1d9]">
-{`import { createPaymentHandler } from '@x402/facilitator';
-
-const handler = createPaymentHandler({
-  facilitatorUrl: '${FREE_ENDPOINT}'  // That's it!
-});
-
-// Start accepting payments 🎉`}
-              </code>
-            </pre>
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-4 justify-center mt-8">
-            <Link
-              href="/docs"
-              className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-all"
+          <div className="flex items-center justify-center gap-4">
+            <button
+              onClick={() => scrollTo('integration')}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground transition-colors font-medium"
             >
-              View Documentation
-              <ArrowRight className="w-5 h-5" />
-            </Link>
-            <Link
-              href="https://github.com/rawgroundbeef/openfacilitator"
-              className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg border border-border bg-background hover:bg-secondary transition-colors font-semibold"
+              Try free
+              <ArrowRight className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => scrollTo('pricing')}
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg border border-border hover:bg-secondary transition-colors font-medium"
             >
-              <Github className="w-5 h-5" />
-              View Source
-            </Link>
+              Get your domain
+              <ArrowRight className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </section>
@@ -175,8 +181,69 @@ const handler = createPaymentHandler({
         </div>
       </section>
 
+      {/* Instant Integration */}
+      <section id="integration" className="py-20 px-6">
+        <div className="max-w-3xl mx-auto">
+          <h2 className="text-3xl font-bold text-center mb-4">
+            Or just use ours
+          </h2>
+          <p className="text-muted-foreground text-center mb-12 max-w-xl mx-auto">
+            Completely free. One line of code. Start accepting payments in seconds.
+          </p>
+
+          <div className="rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 p-6">
+            <div className="flex items-center gap-4 p-4 rounded-lg bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 font-mono text-lg break-all mb-4">
+              <span className="text-gray-900 dark:text-gray-100 flex-1">{FREE_ENDPOINT}</span>
+              <CopyButton text={FREE_ENDPOINT} />
+            </div>
+
+            <div className="flex items-center justify-center gap-8 text-xs text-gray-500 dark:text-gray-400">
+              <span>Base</span>
+              <span>Solana</span>
+              <span>USDC</span>
+            </div>
+          </div>
+
+          {/* Quick code example */}
+          <div className="mt-6 rounded-xl bg-[#0d1117] border border-border/50 overflow-hidden">
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50 bg-[#161b22]">
+              <div className="flex gap-1.5">
+                <div className="w-2.5 h-2.5 rounded-full bg-[#ff5f56]"></div>
+                <div className="w-2.5 h-2.5 rounded-full bg-[#ffbd2e]"></div>
+                <div className="w-2.5 h-2.5 rounded-full bg-[#27ca40]"></div>
+              </div>
+              <span className="text-xs text-muted-foreground ml-2">example.ts</span>
+            </div>
+            <pre className="p-4 text-sm overflow-x-auto">
+              <code className="text-[#c9d1d9]">
+{`import { createPaymentHandler } from '@x402/facilitator';
+
+const handler = createPaymentHandler({
+  facilitatorUrl: '${FREE_ENDPOINT}'
+});`}
+              </code>
+            </pre>
+          </div>
+
+          <div className="flex items-center justify-center gap-8 mt-8">
+            <Link
+              href="/docs"
+              className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
+            >
+              Documentation
+            </Link>
+            <Link
+              href="https://github.com/rawgroundbeef/openfacilitator"
+              className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
+            >
+              View Source
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* How it works */}
-      <section className="py-20 px-6">
+      <section className="py-20 px-6 bg-secondary/30">
         <div className="max-w-6xl mx-auto">
           <h2 className="text-3xl font-bold text-center mb-4">
             How it works
@@ -198,7 +265,7 @@ const handler = createPaymentHandler({
               <Sparkles className="w-8 h-8 text-primary mb-4" />
               <h3 className="text-xl font-semibold mb-2">User pays</h3>
               <p className="text-muted-foreground">
-                User signs a payment with their wallet. No gas fees for ERC-3009 tokens.
+                User signs a payment with their wallet. No gas fees for users.
               </p>
             </div>
             <div className="relative p-6 rounded-2xl bg-background border border-border">
@@ -213,82 +280,55 @@ const handler = createPaymentHandler({
         </div>
       </section>
 
-      {/* Pricing */}
-      <section className="py-20 px-6 bg-secondary/30">
-        <div className="max-w-6xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-4">Want more?</h2>
-          <p className="text-muted-foreground text-center mb-16 max-w-xl mx-auto">
-            The free endpoint works great. But if you want your own branding or to self-host, we&apos;ve got you.
+      {/* Make It Yours (Pricing) */}
+      <section id="pricing" className="py-20 px-6">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-3xl font-bold text-center mb-4">Your brand. Your facilitator.</h2>
+          <p className="text-muted-foreground text-center mb-8 max-w-xl mx-auto">
+            Show up in x402scan. Build trust with your users.
           </p>
-          <div className="grid md:grid-cols-4 gap-6 max-w-6xl mx-auto">
-            {/* Free Hosted */}
-            <div className="p-6 rounded-2xl bg-emerald-500/5 border-2 border-emerald-500/30 shadow-lg relative">
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-emerald-500 text-white text-xs font-bold">
-                You Are Here
-              </div>
-              <h3 className="text-lg font-semibold mb-2">Free Hosted</h3>
+
+          {/* Wallet Balance (for logged-in users) */}
+          {isAuthenticated && billingWallet?.hasWallet && (
+            <div className="flex items-center justify-center gap-2 mb-8 text-sm text-muted-foreground">
+              <Wallet className="w-4 h-4" />
+              <span>Your wallet balance: <strong className="text-foreground">${billingWallet.balance} USDC</strong></span>
+              <Link href="/dashboard/account" className="text-primary hover:underline ml-2">
+                Fund wallet
+              </Link>
+            </div>
+          )}
+
+          <div className="grid md:grid-cols-3 gap-6">
+            {/* Free */}
+            <div className="p-6 rounded-2xl bg-secondary/30 border border-border">
+              <h3 className="text-lg font-semibold mb-2">Free</h3>
               <div className="flex items-baseline gap-1 mb-4">
                 <span className="text-3xl font-bold">$0</span>
                 <span className="text-muted-foreground">/forever</span>
               </div>
-              <ul className="space-y-2 mb-6 text-sm">
+              <ul className="space-y-2 text-sm">
                 <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-emerald-500" />
-                  Use our endpoint
+                  <Check className="w-4 h-4 text-primary" />
+                  Shared endpoint
                 </li>
                 <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-emerald-500" />
+                  <Check className="w-4 h-4 text-primary" />
                   Base + Solana mainnet
                 </li>
                 <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-emerald-500" />
+                  <Check className="w-4 h-4 text-primary" />
                   No account needed
                 </li>
                 <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-emerald-500" />
+                  <Check className="w-4 h-4 text-primary" />
                   Unlimited requests
                 </li>
               </ul>
-              <div className="text-xs text-muted-foreground text-center">
-                Just copy the URL above ↑
-              </div>
-            </div>
-
-            {/* Self-Host */}
-            <div className="p-6 rounded-2xl bg-background border border-border">
-              <h3 className="text-lg font-semibold mb-2">Self-Host</h3>
-              <div className="flex items-baseline gap-1 mb-4">
-                <span className="text-3xl font-bold">$0</span>
-                <span className="text-muted-foreground">/forever</span>
-              </div>
-              <ul className="space-y-2 mb-6 text-sm">
-                <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-primary" />
-                  Full source code
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-primary" />
-                  Your own infrastructure
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-primary" />
-                  Your own keys
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="w-4 h-4 text-primary" />
-                  Docker ready
-                </li>
-              </ul>
-              <Link
-                href="https://github.com/rawgroundbeef/openfacilitator"
-                className="block w-full py-2.5 rounded-lg border border-border text-center font-medium hover:bg-secondary transition-colors text-sm"
-              >
-                View on GitHub
-              </Link>
             </div>
 
             {/* Basic */}
-            <div className="p-6 rounded-2xl bg-background border border-border">
+            <div className="p-6 rounded-2xl bg-background border-2 border-primary">
               <h3 className="text-lg font-semibold mb-2">Basic</h3>
               <div className="flex items-baseline gap-1 mb-4">
                 <span className="text-3xl font-bold">$5</span>
@@ -312,12 +352,12 @@ const handler = createPaymentHandler({
                   Email support
                 </li>
               </ul>
-              <Link
-                href="/auth/signup"
+              <PricingButton
+                tier="basic"
                 className="block w-full py-2.5 rounded-lg bg-primary text-primary-foreground text-center font-medium hover:bg-primary/90 transition-colors text-sm"
-              >
-                Get Started
-              </Link>
+                isPurchasing={purchasingTier === 'basic'}
+                onPurchase={handlePurchase}
+              />
             </div>
 
             {/* Pro */}
@@ -345,46 +385,53 @@ const handler = createPaymentHandler({
                   Priority support
                 </li>
               </ul>
-              <Link
-                href="/auth/signup"
+              <PricingButton
+                tier="pro"
                 className="block w-full py-2.5 rounded-lg border border-border text-center font-medium hover:bg-secondary transition-colors text-sm"
-              >
-                Get Started
-              </Link>
+                isPurchasing={purchasingTier === 'pro'}
+                onPurchase={handlePurchase}
+              />
             </div>
           </div>
+
+          <p className="text-center text-sm text-gray-600 mt-10">
+            Want full control? It&apos;s open source.{' '}
+            <Link href="https://github.com/rawgroundbeef/openfacilitator" className="hover:text-gray-900 transition-colors">
+              View on GitHub &rarr;
+            </Link>
+          </p>
         </div>
       </section>
 
       {/* Endpoints Reference */}
-      <section className="py-20 px-6">
+      <section className="py-20 px-6 bg-secondary/30">
         <div className="max-w-4xl mx-auto">
           <h2 className="text-3xl font-bold text-center mb-4">API Reference</h2>
           <p className="text-muted-foreground text-center mb-12">
             Three endpoints. That&apos;s all you need.
           </p>
-          
+
           <div className="space-y-4">
             <div className="p-5 rounded-xl bg-background border border-border">
               <div className="flex items-center gap-3 mb-2">
-                <span className="px-2 py-1 rounded text-xs font-bold bg-emerald-500/20 text-emerald-400">GET</span>
-                <code className="text-sm font-mono">/free/supported</code>
+                <span className="px-2 py-1 rounded text-xs font-bold bg-gray-500/20 text-gray-500">GET</span>
+                <code className="text-sm font-mono">/supported</code>
               </div>
               <p className="text-sm text-muted-foreground">Returns supported networks and tokens</p>
             </div>
-            
+
             <div className="p-5 rounded-xl bg-background border border-border">
               <div className="flex items-center gap-3 mb-2">
                 <span className="px-2 py-1 rounded text-xs font-bold bg-blue-500/20 text-blue-400">POST</span>
-                <code className="text-sm font-mono">/free/verify</code>
+                <code className="text-sm font-mono">/verify</code>
               </div>
               <p className="text-sm text-muted-foreground">Verify a payment signature is valid</p>
             </div>
-            
+
             <div className="p-5 rounded-xl bg-background border border-border">
               <div className="flex items-center gap-3 mb-2">
                 <span className="px-2 py-1 rounded text-xs font-bold bg-blue-500/20 text-blue-400">POST</span>
-                <code className="text-sm font-mono">/free/settle</code>
+                <code className="text-sm font-mono">/settle</code>
               </div>
               <p className="text-sm text-muted-foreground">Submit the transaction to the blockchain</p>
             </div>
