@@ -11,9 +11,9 @@ export function useDomainStatus(facilitatorId: string | undefined, enabled = tru
 
   const { data: domainStatus } = query;
 
-  // Extract DNS record info
+  // Extract DNS record info from Railway
   const dnsRecord = domainStatus?.dnsRecords?.[0];
-  const cnameValue = dnsRecord?.value || 'api.openfacilitator.io';
+  const cnameValue = dnsRecord?.value || '';
   const cnameName = dnsRecord?.name?.split('.')[0] || '';
   const cnameType = dnsRecord?.type || 'CNAME';
 

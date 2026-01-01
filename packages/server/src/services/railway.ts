@@ -18,6 +18,11 @@ interface CustomDomainResult {
   domain?: string;
   error?: string;
   status?: 'pending' | 'active' | 'error';
+  dnsRecords?: {
+    type: string;
+    name: string;
+    value: string;
+  }[];
 }
 
 interface DomainStatus {
@@ -145,10 +150,17 @@ export async function addCustomDomain(domain: string): Promise<CustomDomainResul
       },
     });
 
+    const dnsRecords = result.customDomainCreate.status.dnsRecords.map((r) => ({
+      type: r.recordType.replace('DNS_RECORD_TYPE_', ''),
+      name: r.hostlabel || result.customDomainCreate.domain,
+      value: r.requiredValue,
+    }));
+
     return {
       success: true,
       domain: result.customDomainCreate.domain,
       status: 'pending',
+      dnsRecords,
     };
   } catch (error) {
     console.error('Failed to add custom domain:', error);

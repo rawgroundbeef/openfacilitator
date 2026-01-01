@@ -868,14 +868,7 @@ router.post('/facilitators/:id/domain', requireAuth, async (req: Request, res: R
         success: true,
         domain: facilitator.custom_domain,
         status: 'manual_setup',
-        message: 'Please add this domain manually in Railway: Settings → Networking → Custom Domains',
-        dnsRecords: [
-          {
-            type: 'CNAME',
-            name: facilitator.custom_domain.split('.')[0],
-            value: 'api.openfacilitator.io',
-          },
-        ],
+        message: 'Please add this domain manually in Railway: Settings → Networking → Custom Domains. Railway will provide the DNS target value.',
       });
       return;
     }
@@ -886,17 +879,10 @@ router.post('/facilitators/:id/domain', requireAuth, async (req: Request, res: R
       // If Railway API fails, return manual instructions
       console.error('Railway API failed:', result.error);
       res.json({
-        success: true,
+        success: false,
         domain: facilitator.custom_domain,
-        status: 'manual_setup',
-        message: `Railway API error. Please add domain manually in Railway Dashboard. Error: ${result.error}`,
-        dnsRecords: [
-          {
-            type: 'CNAME',
-            name: facilitator.custom_domain.split('.')[0],
-            value: 'api.openfacilitator.io',
-          },
-        ],
+        status: 'error',
+        message: `Railway API error: ${result.error}. Please try again or add domain manually in Railway Dashboard.`,
       });
       return;
     }
@@ -906,23 +892,13 @@ router.post('/facilitators/:id/domain', requireAuth, async (req: Request, res: R
       domain: result.domain,
       status: result.status,
       message: 'Domain added to Railway. Configure your DNS records.',
+      dnsRecords: result.dnsRecords,
     });
   } catch (error) {
     console.error('Setup domain error:', error);
-    // Return manual instructions on any error
-    const facilitator = getFacilitatorById(req.params.id);
-    res.json({
-      success: true,
-      domain: facilitator?.custom_domain,
-      status: 'manual_setup',
-      message: 'Please add this domain manually in Railway Dashboard.',
-      dnsRecords: [
-        {
-          type: 'CNAME',
-          name: facilitator?.custom_domain?.split('.')[0] || '',
-          value: 'api.openfacilitator.io',
-        },
-      ],
+    res.status(500).json({
+      success: false,
+      error: 'Failed to setup domain. Please try again.',
     });
   }
 });
@@ -1036,13 +1012,7 @@ router.get('/facilitators/:id/domain/status', requireAuth, async (req: Request, 
         domain: facilitator.custom_domain,
         status: 'unconfigured',
         railwayConfigured: false,
-        dnsRecords: [
-          {
-            type: 'CNAME',
-            name: facilitator.custom_domain,
-            value: 'api.openfacilitator.io',
-          },
-        ],
+        message: 'Railway integration not configured. Please contact support.',
       });
       return;
     }
@@ -1055,13 +1025,6 @@ router.get('/facilitators/:id/domain/status', requireAuth, async (req: Request, 
         status: 'not_added',
         railwayConfigured: true,
         message: 'Domain not yet added to Railway. Click "Setup Domain" to add it.',
-        dnsRecords: [
-          {
-            type: 'CNAME',
-            name: facilitator.custom_domain,
-            value: 'api.openfacilitator.io',
-          },
-        ],
       });
       return;
     }
