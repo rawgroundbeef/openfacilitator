@@ -17,7 +17,7 @@ import { requireAuth } from '../middleware/auth.js';
 const MEMEPUTER_X402_BASE_URL = process.env.MEMEPUTER_X402_BASE_URL;
 
 function getMemeputerEndpoint(): string {
-  return `${MEMEPUTER_X402_BASE_URL}/x402/solana/openfacilitator_agent/subscribe`;
+  return `${MEMEPUTER_X402_BASE_URL}/x402/solana/openfacilitator_agent/subscribe_basic`;
 }
 
 const router: IRouter = Router();
