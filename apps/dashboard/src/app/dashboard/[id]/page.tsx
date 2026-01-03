@@ -339,19 +339,25 @@ export default function FacilitatorDetailPage() {
                     <Button variant="outline" onClick={() => setIsEditInfoOpen(false)}>
                       Cancel
                     </Button>
-                    <Button
-                      onClick={() => updateNameMutation.mutate(editName)}
-                      disabled={!editName || editName === facilitator.name || updateNameMutation.isPending}
-                    >
-                      {updateNameMutation.isPending ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Saving...
-                        </>
-                      ) : (
-                        'Save'
-                      )}
-                    </Button>
+                    {editName && editName !== facilitator.name ? (
+                      <Button
+                        onClick={() => updateNameMutation.mutate(editName)}
+                        disabled={updateNameMutation.isPending}
+                      >
+                        {updateNameMutation.isPending ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          'Save'
+                        )}
+                      </Button>
+                    ) : (
+                      <Button onClick={() => setIsEditInfoOpen(false)}>
+                        Done
+                      </Button>
+                    )}
                   </div>
                 </DialogContent>
               </Dialog>
