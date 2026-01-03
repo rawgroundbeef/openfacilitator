@@ -10,6 +10,7 @@ export interface Facilitator {
   supportedChains: number[];
   supportedTokens: TokenConfig[];
   url: string;
+  favicon?: string | null;
   createdAt: string;
   updatedAt: string;
 }

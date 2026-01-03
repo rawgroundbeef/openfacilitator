@@ -41,29 +41,38 @@ function StatusBadge({ status }: { status: 'active' | 'pending' | 'expired' }) {
   );
 }
 
-function FaviconImage({ url, domain }: { url: string; domain: string }) {
-  const [imgSrc, setImgSrc] = useState(`${url}/favicon.ico`);
+function FaviconImage({ url, favicon }: { url: string; favicon?: string | null }) {
   const [hasError, setHasError] = useState(false);
 
-  if (hasError) {
-    // Show default OpenFacilitator icon
+  // If we have a stored favicon from the API, use it directly
+  if (favicon) {
     return (
       <img
-        src="/icon.svg"
+        src={favicon}
         alt=""
         className="w-8 h-8 rounded shrink-0"
       />
     );
   }
 
+  // Fallback: try to load from the facilitator's live URL
+  if (!hasError) {
+    return (
+      <img
+        src={`${url}/favicon.ico`}
+        alt=""
+        className="w-8 h-8 rounded shrink-0"
+        onError={() => setHasError(true)}
+      />
+    );
+  }
+
+  // Final fallback: show default OpenFacilitator icon
   return (
     <img
-      src={imgSrc}
+      src="/icon.svg"
       alt=""
       className="w-8 h-8 rounded shrink-0"
-      onError={() => {
-        setHasError(true);
-      }}
     />
   );
 }
@@ -118,7 +127,7 @@ export function FacilitatorCard({ facilitator, stats, onManageClick }: Facilitat
         {/* Header */}
         <div className="flex items-center gap-3 mb-4">
           {/* Favicon */}
-          <FaviconImage url={url} domain={domain} />
+          <FaviconImage url={url} favicon={facilitator.favicon} />
           
           {/* Domain + Status */}
           <div className="flex-1 min-w-0">

@@ -243,6 +243,7 @@ router.get('/facilitators', requireAuth, async (req: Request, res: Response) => 
         url: f.custom_domain
           ? `https://${f.custom_domain}`
           : `https://${f.subdomain}.openfacilitator.io`,
+        favicon: f.favicon || null,
         createdAt: formatSqliteDate(f.created_at),
         updatedAt: formatSqliteDate(f.updated_at),
       }))
@@ -276,6 +277,7 @@ router.get('/facilitators/:id', requireAuth, async (req: Request, res: Response)
       url: facilitator.custom_domain
         ? `https://${facilitator.custom_domain}`
         : `https://${facilitator.subdomain}.openfacilitator.io`,
+      favicon: facilitator.favicon || null,
       createdAt: formatSqliteDate(facilitator.created_at),
       updatedAt: formatSqliteDate(facilitator.updated_at),
     });
