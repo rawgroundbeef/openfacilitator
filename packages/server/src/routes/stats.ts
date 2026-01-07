@@ -13,8 +13,8 @@ const router: IRouter = Router();
 const STATS_PRICE_ATOMIC = '5000000'; // $5 USDC (6 decimals)
 const USDC_SOLANA_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 
-// Free facilitator endpoint (from SDK default)
-const FACILITATOR_URL = 'https://pay.openfacilitator.io';
+// Free facilitator endpoint (where /free/* routes live)
+const FACILITATOR_URL = 'https://api.openfacilitator.io';
 
 // Payment recipient - free facilitator's Solana address
 const STATS_PAY_TO = 'Hbe1vdFs4EQVVAzcV12muHhr6DEKwrT9roMXGPLxLBLP';
