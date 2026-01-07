@@ -123,9 +123,12 @@ router.get('/stats', async (req: Request, res: Response) => {
 
     // Decode payment payload
     let paymentPayload: unknown;
+    let paymentNetwork: string;
     try {
       const decoded = Buffer.from(paymentHeader, 'base64').toString('utf-8');
       paymentPayload = JSON.parse(decoded);
+      // Extract network from payment payload
+      paymentNetwork = (paymentPayload as { network?: string }).network || 'solana';
     } catch {
       res.status(400).json({
         error: 'Invalid payment payload',
@@ -134,6 +137,9 @@ router.get('/stats', async (req: Request, res: Response) => {
       return;
     }
 
+    // Find the matching requirement for the payment's network
+    const requirement = requirements.find(r => r.network === paymentNetwork) || requirements[0];
+
     // Step 1: Verify payment with facilitator
     const verifyResponse = await fetch(`${FACILITATOR_URL}/verify`, {
       method: 'POST',
@@ -141,7 +147,7 @@ router.get('/stats', async (req: Request, res: Response) => {
       body: JSON.stringify({
         x402Version: 1,
         paymentPayload,
-        paymentRequirements: requirements,
+        paymentRequirements: requirement,
       }),
     });
 
@@ -166,7 +172,7 @@ router.get('/stats', async (req: Request, res: Response) => {
       body: JSON.stringify({
         x402Version: 1,
         paymentPayload,
-        paymentRequirements: requirements,
+        paymentRequirements: requirement,
       }),
     });
 
