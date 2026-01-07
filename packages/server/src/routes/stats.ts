@@ -13,8 +13,8 @@ const router: IRouter = Router();
 const STATS_PRICE_ATOMIC = '5000000'; // $5 USDC (6 decimals)
 const USDC_SOLANA_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 
-// Free facilitator endpoint (where /free/* routes live)
-const FACILITATOR_URL = 'https://api.openfacilitator.io';
+// Facilitator endpoint (pay.openfacilitator.io is a registered facilitator)
+const FACILITATOR_URL = 'https://pay.openfacilitator.io';
 
 // Payment recipient - free facilitator's Solana address
 const STATS_PAY_TO = 'Hbe1vdFs4EQVVAzcV12muHhr6DEKwrT9roMXGPLxLBLP';
@@ -108,7 +108,7 @@ router.get('/stats', async (req: Request, res: Response) => {
     }
 
     // Step 1: Verify payment with facilitator
-    const verifyResponse = await fetch(`${FACILITATOR_URL}/free/verify`, {
+    const verifyResponse = await fetch(`${FACILITATOR_URL}/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -133,7 +133,7 @@ router.get('/stats', async (req: Request, res: Response) => {
     }
 
     // Step 2: Settle payment
-    const settleResponse = await fetch(`${FACILITATOR_URL}/free/settle`, {
+    const settleResponse = await fetch(`${FACILITATOR_URL}/settle`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
