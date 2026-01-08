@@ -22,6 +22,8 @@
 
 OpenFacilitator is an open source platform that lets anyone deploy their own x402 payment facilitator. Self-host for free or use our managed service for instant setup.
 
+CA: CTCujQ53aJAMVveGNSLHfbik4DZQkr3T3QtnStTHpump
+
 ## 🚀 Quick Start
 
 ### Self-Hosted (Free)
