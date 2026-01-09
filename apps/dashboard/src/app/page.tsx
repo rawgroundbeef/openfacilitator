@@ -332,6 +332,36 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Discovery */}
+      <section className="py-20 px-6">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-3xl font-bold text-center mb-4">
+            x402 Discovery Built In
+          </h2>
+          <p className="text-muted-foreground text-center mb-12 max-w-2xl mx-auto text-balance">
+            We&apos;ve partnered with trusted x402 marketplaces like{' '}
+            <a href="https://x402.jobs" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+              x402.jobs
+            </a>{' '}
+            to give your facilitator access to discoverable, verified endpoints out of the box. Your agents can find paid APIs programmatically.
+          </p>
+
+          <div className="flex items-center gap-4 p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 mb-6">
+            <code className="text-gray-900 dark:text-gray-100 flex-1 font-mono text-sm sm:text-base whitespace-nowrap overflow-hidden text-ellipsis">
+              GET /discovery/resources
+            </code>
+            <CopyButton text="https://api.openfacilitator.io/discovery/resources" label="Copy URL" />
+          </div>
+
+          <p className="text-sm text-muted-foreground text-center">
+            Hundreds of verified x402-enabled APIs with payment requirements. No auth needed.{' '}
+            <Link href="/docs" className="text-primary hover:underline">
+              See the docs →
+            </Link>
+          </p>
+        </div>
+      </section>
+
       {/* Make It Yours (Pricing) */}
       <section id="pricing" className="py-20 px-6">
         <div className="max-w-4xl mx-auto">
@@ -426,7 +456,7 @@ export default function Home() {
         <div className="max-w-4xl mx-auto">
           <h2 className="text-3xl font-bold text-center mb-4">API Reference</h2>
           <p className="text-muted-foreground text-center mb-12">
-            Three endpoints. That&apos;s all you need.
+            Four endpoints. That&apos;s all you need.
           </p>
 
           <div className="space-y-4">
@@ -436,6 +466,14 @@ export default function Home() {
                 <code className="text-sm font-mono">/supported</code>
               </div>
               <p className="text-sm text-muted-foreground">Returns supported networks and tokens</p>
+            </div>
+
+            <div className="p-5 rounded-xl bg-background border border-border">
+              <div className="flex items-center gap-3 mb-2">
+                <span className="px-2 py-1 rounded text-xs font-bold bg-gray-500/20 text-gray-500">GET</span>
+                <code className="text-sm font-mono">/discovery/resources</code>
+              </div>
+              <p className="text-sm text-muted-foreground">Discover x402-enabled APIs from trusted marketplaces</p>
             </div>
 
             <div className="p-5 rounded-xl bg-background border border-border">
