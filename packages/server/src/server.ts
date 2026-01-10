@@ -3,8 +3,9 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { facilitatorRouter } from './routes/facilitator.js';
 import { adminRouter } from './routes/admin.js';
-import { authRouter } from './routes/auth.js';
 import { publicRouter } from './routes/public.js';
+import { toNodeHandler } from 'better-auth/node';
+import { getAuth } from './auth/index.js';
 import { subscriptionsRouter } from './routes/subscriptions.js';
 import { statsRouter } from './routes/stats.js';
 import { discoveryRouter } from './routes/discovery.js';
@@ -66,7 +67,11 @@ export function createServer(): Express {
   });
 
   // Auth routes (handled by Better Auth)
-  app.use('/api/auth', authRouter);
+  // Mount directly to preserve full URL path for Better Auth
+  app.all('/api/auth/*', (req, res) => {
+    const auth = getAuth();
+    return toNodeHandler(auth)(req, res);
+  });
 
   // Admin API routes (for dashboard)
   app.use('/api/admin', adminRouter);
