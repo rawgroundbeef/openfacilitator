@@ -1192,22 +1192,23 @@ router.get('/pay/:linkId/requirements', async (req: Request, res: Response) => {
                           link.network === 'solana-devnet' ||
                           link.network.startsWith('solana:');
 
-  // Build payment requirements
+  // Build payment requirements - payments go to link's pay_to_address (not facilitator wallet)
   const paymentRequirements: Record<string, unknown> = {
     scheme: 'exact',
     network: link.network,
     maxAmountRequired: link.amount,
     asset: link.asset,
+    payTo: link.pay_to_address, // Payments go to user-specified address
     description: link.description || link.name,
   };
 
-  // For Solana, we need the fee payer (facilitator's Solana address) and Solana payTo
+  // For Solana, we also need the fee payer (facilitator's Solana wallet pays gas)
   let solanaRpcUrl: string | undefined;
   if (isSolanaNetwork && record.encrypted_solana_private_key) {
     try {
       const solanaPrivateKey = decryptPrivateKey(record.encrypted_solana_private_key);
       const solanaFeePayer = getSolanaPublicKey(solanaPrivateKey);
-      paymentRequirements.payTo = solanaFeePayer; // Pay to facilitator's Solana wallet
+      // Fee payer is the facilitator wallet (pays gas), but payTo is the link's address (receives funds)
       paymentRequirements.extra = { feePayer: solanaFeePayer };
 
       // Provide RPC URL for frontend
@@ -1219,10 +1220,7 @@ router.get('/pay/:linkId/requirements', async (req: Request, res: Response) => {
       res.status(500).json({ error: 'Solana wallet not configured properly' });
       return;
     }
-  } else if (!isSolanaNetwork) {
-    // EVM network - use owner address
-    paymentRequirements.payTo = record.owner_address;
-  } else {
+  } else if (isSolanaNetwork) {
     res.status(500).json({ error: 'Solana wallet not configured for this facilitator' });
     return;
   }

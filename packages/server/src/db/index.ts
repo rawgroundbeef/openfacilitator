@@ -70,6 +70,20 @@ export function initializeDatabase(dbPath?: string): Database.Database {
     // Table might not exist yet, that's fine
   }
 
+  // Migration: Add pay_to_address column to payment_links table
+  try {
+    const paymentLinksColumns = db.prepare("PRAGMA table_info(payment_links)").all() as { name: string }[];
+    const hasPayToAddress = paymentLinksColumns.some(col => col.name === 'pay_to_address');
+    if (paymentLinksColumns.length > 0 && !hasPayToAddress) {
+      // For existing links without pay_to_address, we need to set a default
+      // We'll set it to empty string and require it to be updated
+      db.exec("ALTER TABLE payment_links ADD COLUMN pay_to_address TEXT NOT NULL DEFAULT ''");
+      console.log('✅ Added pay_to_address column to payment_links table');
+    }
+  } catch (e) {
+    // Table might not exist yet, that's fine
+  }
+
   // Migration: Remove CHECK constraint from subscriptions table (only 'starter' tier now)
   try {
     const tableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='subscriptions'").get() as { sql: string } | undefined;
@@ -258,6 +272,7 @@ export function initializeDatabase(dbPath?: string): Database.Database {
       amount TEXT NOT NULL,
       asset TEXT NOT NULL,
       network TEXT NOT NULL,
+      pay_to_address TEXT NOT NULL,
       success_redirect_url TEXT,
       webhook_url TEXT,
       webhook_secret TEXT,

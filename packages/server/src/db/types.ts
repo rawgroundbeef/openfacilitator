@@ -110,6 +110,7 @@ export interface PaymentLinkRecord {
   amount: string;              // Atomic units (e.g., "1000000" for $1 USDC)
   asset: string;               // Token contract address
   network: string;             // e.g., 'base', 'base-sepolia', 'solana'
+  pay_to_address: string;      // Wallet address to receive payments (separate from facilitator wallet)
   success_redirect_url: string | null;  // Optional redirect after payment
   webhook_url: string | null;           // Optional per-link webhook
   webhook_secret: string | null;

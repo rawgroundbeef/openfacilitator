@@ -134,6 +134,7 @@ export interface PaymentLink {
   amount: string;
   asset: string;
   network: string;
+  payToAddress: string;
   successRedirectUrl: string | null;
   webhookUrl: string | null;
   active: boolean;
@@ -163,6 +164,7 @@ export interface CreatePaymentLinkRequest {
   amount: string;
   asset: string;
   network: string;
+  payToAddress: string;
   successRedirectUrl?: string;
   webhookUrl?: string;
 }
@@ -501,6 +503,7 @@ class ApiClient {
       amount: string;
       asset: string;
       network: string;
+      payToAddress: string;
       successRedirectUrl: string | null;
       webhookUrl: string | null;
       active: boolean;

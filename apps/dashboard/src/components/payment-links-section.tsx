@@ -89,6 +89,7 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
   const [amount, setAmount] = useState('');
   const [network, setNetwork] = useState('base');
   const [asset, setAsset] = useState(TOKEN_OPTIONS['base'][0].address);
+  const [payToAddress, setPayToAddress] = useState('');
   const [successRedirectUrl, setSuccessRedirectUrl] = useState('');
 
   const { data, isLoading } = useQuery({
@@ -104,6 +105,7 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
         amount: parseAmountToAtomic(amount),
         asset,
         network,
+        payToAddress,
         successRedirectUrl: successRedirectUrl || undefined,
       }),
     onSuccess: () => {
@@ -136,6 +138,7 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
     setAmount('');
     setNetwork('base');
     setAsset(TOKEN_OPTIONS['base'][0].address);
+    setPayToAddress('');
     setSuccessRedirectUrl('');
   };
 
@@ -160,6 +163,7 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
     setAmount(formatAmount(link.amount));
     setNetwork(link.network);
     setAsset(link.asset);
+    setPayToAddress(link.payToAddress);
     setSuccessRedirectUrl(link.successRedirectUrl || '');
     setIsEditOpen(true);
   };
@@ -174,6 +178,7 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
         amount: parseAmountToAtomic(amount),
         asset,
         network,
+        payToAddress,
         successRedirectUrl: successRedirectUrl || null,
       },
     });
@@ -288,6 +293,18 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
                   </div>
                 </div>
                 <div className="space-y-2">
+                  <Label htmlFor="payToAddress">Payment Address</Label>
+                  <Input
+                    id="payToAddress"
+                    placeholder={network === 'solana' ? 'Solana wallet address' : '0x...'}
+                    value={payToAddress}
+                    onChange={(e) => setPayToAddress(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Wallet address to receive payments (separate from facilitator wallet)
+                  </p>
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="redirectUrl">Success Redirect URL (optional)</Label>
                   <Input
                     id="redirectUrl"
@@ -307,7 +324,7 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
                 </Button>
                 <Button
                   onClick={() => createMutation.mutate()}
-                  disabled={!name || !amount || createMutation.isPending}
+                  disabled={!name || !amount || !payToAddress || createMutation.isPending}
                 >
                   {createMutation.isPending ? (
                     <>
@@ -497,6 +514,18 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
               </div>
             </div>
             <div className="space-y-2">
+              <Label htmlFor="edit-payToAddress">Payment Address</Label>
+              <Input
+                id="edit-payToAddress"
+                placeholder={network === 'solana' ? 'Solana wallet address' : '0x...'}
+                value={payToAddress}
+                onChange={(e) => setPayToAddress(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Wallet address to receive payments
+              </p>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="edit-redirectUrl">Success Redirect URL (optional)</Label>
               <Input
                 id="edit-redirectUrl"
@@ -513,7 +542,7 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
             </Button>
             <Button
               onClick={handleUpdateLink}
-              disabled={!name || !amount || updateMutation.isPending}
+              disabled={!name || !amount || !payToAddress || updateMutation.isPending}
             >
               {updateMutation.isPending ? (
                 <>

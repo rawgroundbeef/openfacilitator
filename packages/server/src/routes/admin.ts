@@ -1484,6 +1484,7 @@ const createPaymentLinkSchema = z.object({
   amount: z.string().min(1), // Atomic units
   asset: z.string().min(1),  // Token address
   network: z.string().min(1), // e.g., 'base', 'base-sepolia', 'solana'
+  payToAddress: z.string().min(1), // Wallet address to receive payments
   successRedirectUrl: z.string().url().max(2048).optional(),
   webhookUrl: z.string().url().max(2048).optional(),
 });
@@ -1494,6 +1495,7 @@ const updatePaymentLinkSchema = z.object({
   amount: z.string().min(1).optional(),
   asset: z.string().min(1).optional(),
   network: z.string().min(1).optional(),
+  payToAddress: z.string().min(1).optional(),
   successRedirectUrl: z.string().url().max(2048).optional().nullable(),
   webhookUrl: z.string().url().max(2048).optional().nullable(),
   active: z.boolean().optional(),
@@ -1531,6 +1533,7 @@ router.get('/facilitators/:id/payment-links', requireAuth, async (req: Request, 
         amount: link.amount,
         asset: link.asset,
         network: link.network,
+        payToAddress: link.pay_to_address,
         successRedirectUrl: link.success_redirect_url,
         webhookUrl: link.webhook_url,
         active: link.active === 1,
@@ -1588,6 +1591,7 @@ router.post('/facilitators/:id/payment-links', requireAuth, async (req: Request,
       amount: parsed.data.amount,
       asset: parsed.data.asset,
       network: parsed.data.network,
+      pay_to_address: parsed.data.payToAddress,
       success_redirect_url: parsed.data.successRedirectUrl,
       webhook_url: parsed.data.webhookUrl,
       webhook_secret: webhookSecret,
@@ -1600,6 +1604,7 @@ router.post('/facilitators/:id/payment-links', requireAuth, async (req: Request,
       amount: link.amount,
       asset: link.asset,
       network: link.network,
+      payToAddress: link.pay_to_address,
       successRedirectUrl: link.success_redirect_url,
       webhookUrl: link.webhook_url,
       active: link.active === 1,
@@ -1641,6 +1646,7 @@ router.get('/facilitators/:id/payment-links/:linkId', requireAuth, async (req: R
       amount: link.amount,
       asset: link.asset,
       network: link.network,
+      payToAddress: link.pay_to_address,
       successRedirectUrl: link.success_redirect_url,
       webhookUrl: link.webhook_url,
       active: link.active === 1,
@@ -1696,6 +1702,7 @@ router.patch('/facilitators/:id/payment-links/:linkId', requireAuth, async (req:
     if (parsed.data.amount !== undefined) updates.amount = parsed.data.amount;
     if (parsed.data.asset !== undefined) updates.asset = parsed.data.asset;
     if (parsed.data.network !== undefined) updates.network = parsed.data.network;
+    if (parsed.data.payToAddress !== undefined) updates.pay_to_address = parsed.data.payToAddress;
     if (parsed.data.successRedirectUrl !== undefined) updates.success_redirect_url = parsed.data.successRedirectUrl;
     if (parsed.data.webhookUrl !== undefined) {
       updates.webhook_url = parsed.data.webhookUrl;
@@ -1719,6 +1726,7 @@ router.patch('/facilitators/:id/payment-links/:linkId', requireAuth, async (req:
       amount: link.amount,
       asset: link.asset,
       network: link.network,
+      payToAddress: link.pay_to_address,
       successRedirectUrl: link.success_redirect_url,
       webhookUrl: link.webhook_url,
       active: link.active === 1,
