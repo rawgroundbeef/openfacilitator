@@ -381,7 +381,7 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
   // Set CSP headers to allow inline scripts and external dependencies
   res.setHeader(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.openfacilitator.io https://api.mainnet-beta.solana.com https://api.devnet.solana.com https://*.solana.com https://*.helius.xyz https://*.quicknode.com; img-src 'self' data:; font-src 'self';"
+    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.openfacilitator.io https://api.mainnet-beta.solana.com https://api.devnet.solana.com https://*.solana.com https://*.helius-rpc.com https://*.helius.xyz https://*.quicknode.com https://cdn.jsdelivr.net; img-src 'self' data:; font-src 'self';"
   );
 
   const link = getPaymentLinkById(req.params.linkId);
