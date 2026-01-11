@@ -2,7 +2,8 @@
  * Internal Webhook Endpoints
  *
  * These endpoints receive webhook payloads from OpenFacilitator's own
- * webhook system to trigger internal business logic like subscription activation.
+ * webhook system to trigger internal business logic like subscription activation
+ * and facilitator creation.
  */
 
 import { Router, type Request, type Response } from 'express';
@@ -16,8 +17,83 @@ import {
 } from '../db/subscriptions.js';
 import { getUserWalletByAddress } from '../db/user-wallets.js';
 import { getDatabase } from '../db/index.js';
+import { createFacilitator } from '../db/facilitators.js';
+import {
+  getPendingFacilitatorByUserId,
+  deletePendingFacilitator,
+} from '../db/pending-facilitators.js';
+import { defaultTokens } from '@openfacilitator/core';
+import { addCustomDomain, isRailwayConfigured } from '../services/railway.js';
 
 const router: RouterType = Router();
+
+/**
+ * Create a facilitator from a pending request
+ */
+async function createFacilitatorFromPending(userId: string): Promise<{
+  created: boolean;
+  facilitator?: {
+    id: string;
+    name: string;
+    subdomain: string;
+    customDomain: string;
+  };
+  error?: string;
+}> {
+  const pending = getPendingFacilitatorByUserId(userId);
+  if (!pending) {
+    return { created: false, error: 'No pending facilitator found' };
+  }
+
+  try {
+    // Default chains: Base Mainnet + Solana Mainnet
+    const chains = [8453, 'solana'];
+    const tokens = defaultTokens.filter((t) => chains.includes(t.chainId));
+
+    const facilitator = createFacilitator({
+      name: pending.name,
+      subdomain: pending.subdomain,
+      custom_domain: pending.custom_domain,
+      owner_address: userId,
+      supported_chains: JSON.stringify(chains),
+      supported_tokens: JSON.stringify(tokens),
+    });
+
+    if (!facilitator) {
+      return { created: false, error: 'Failed to create facilitator (subdomain may already exist)' };
+    }
+
+    // Register subdomain with Railway
+    const subdomainFull = `${pending.subdomain}.openfacilitator.io`;
+    if (isRailwayConfigured()) {
+      console.log(`[Subscription Webhook] Registering subdomain with Railway: ${subdomainFull}`);
+      const railwayResult = await addCustomDomain(subdomainFull);
+      if (railwayResult.success) {
+        console.log(`[Subscription Webhook] Successfully registered ${subdomainFull} with Railway`);
+      } else {
+        console.error(`[Subscription Webhook] Failed to register ${subdomainFull}:`, railwayResult.error);
+      }
+    }
+
+    // Delete the pending facilitator record
+    deletePendingFacilitator(pending.id);
+
+    console.log(`[Subscription Webhook] Created facilitator ${facilitator.id} for user ${userId}`);
+
+    return {
+      created: true,
+      facilitator: {
+        id: facilitator.id,
+        name: facilitator.name,
+        subdomain: facilitator.subdomain,
+        customDomain: pending.custom_domain,
+      },
+    };
+  } catch (error) {
+    console.error('[Subscription Webhook] Error creating facilitator:', error);
+    return { created: false, error: error instanceof Error ? error.message : 'Unknown error' };
+  }
+}
 
 /**
  * Verify webhook signature
@@ -135,6 +211,10 @@ router.post('/subscription', async (req: Request, res: Response) => {
       }
 
       console.log(`[Subscription Webhook] Extended subscription for user ${userId}, expires ${extended.expires_at}`);
+
+      // Also create pending facilitator if one exists
+      const facilitatorResult = await createFacilitatorFromPending(userId);
+
       res.json({
         success: true,
         action: 'extended',
@@ -142,6 +222,7 @@ router.post('/subscription', async (req: Request, res: Response) => {
         subscriptionId: extended.id,
         tier: extended.tier,
         expiresAt: extended.expires_at,
+        facilitator: facilitatorResult.created ? facilitatorResult.facilitator : undefined,
       });
       return;
     }
@@ -159,6 +240,10 @@ router.post('/subscription', async (req: Request, res: Response) => {
     );
 
     console.log(`[Subscription Webhook] Created subscription for user ${userId}, expires ${subscription.expires_at}`);
+
+    // Also create pending facilitator if one exists
+    const facilitatorResult = await createFacilitatorFromPending(userId);
+
     res.json({
       success: true,
       action: 'created',
@@ -166,6 +251,7 @@ router.post('/subscription', async (req: Request, res: Response) => {
       subscriptionId: subscription.id,
       tier: subscription.tier,
       expiresAt: subscription.expires_at,
+      facilitator: facilitatorResult.created ? facilitatorResult.facilitator : undefined,
     });
   } catch (error) {
     console.error('[Subscription Webhook] Error:', error);

@@ -321,6 +321,18 @@ export function initializeDatabase(dbPath?: string): Database.Database {
     );
 
     CREATE INDEX IF NOT EXISTS idx_webhooks_facilitator ON webhooks(facilitator_id);
+
+    -- Pending facilitators table (awaiting payment)
+    CREATE TABLE IF NOT EXISTS pending_facilitators (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      custom_domain TEXT NOT NULL,
+      subdomain TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_pending_facilitators_user ON pending_facilitators(user_id);
   `);
 
   console.log('✅ Database initialized at', databasePath);
@@ -344,5 +356,6 @@ export * from './user-wallets.js';
 export * from './subscriptions.js';
 export * from './payment-links.js';
 export * from './webhooks.js';
+export * from './pending-facilitators.js';
 export * from './types.js';
 

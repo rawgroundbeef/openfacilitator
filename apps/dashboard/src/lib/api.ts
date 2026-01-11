@@ -259,6 +259,19 @@ class ApiClient {
     });
   }
 
+  async createPendingFacilitator(data: { name: string; customDomain: string }): Promise<{
+    id: string;
+    name: string;
+    customDomain: string;
+    subdomain: string;
+    createdAt: string;
+  }> {
+    return this.request('/api/admin/pending-facilitator', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   async updateFacilitator(
     id: string,
     data: Partial<{

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Loader2, ExternalLink } from 'lucide-react';
-import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -35,113 +35,43 @@ export function CreateFacilitatorModal({
   const [name, setName] = useState('');
   const [domain, setDomain] = useState('');
   const { toast } = useToast();
-  const queryClient = useQueryClient();
 
-  // Check subscription status
-  const { data: subscription, isLoading: subscriptionLoading } = useQuery({
-    queryKey: ['subscription'],
-    queryFn: () => api.getSubscriptionStatus(),
-    enabled: open,
-  });
-
-  const hasActiveSubscription = subscription?.active;
-
-  const createMutation = useMutation({
+  const pendingMutation = useMutation({
     mutationFn: async (data: { name: string; customDomain: string }) => {
-      // Create the facilitator (subscription already active via payment link)
-      const facilitator = await api.createFacilitator({
-        ...data,
-        subdomain: data.customDomain.replace(/\./g, '-'),
+      // Save pending facilitator request
+      await api.createPendingFacilitator(data);
+    },
+    onSuccess: () => {
+      // Open payment link - webhook will create the facilitator after payment
+      window.open(SUBSCRIPTION_PAYMENT_URL, '_blank');
+
+      toast({
+        title: 'Complete payment to create facilitator',
+        description: 'Your facilitator will be created automatically after payment.',
       });
 
-      // Set up the domain on Railway
-      await api.setupDomain(facilitator.id);
-
-      return facilitator;
-    },
-    onSuccess: (facilitator) => {
-      queryClient.invalidateQueries({ queryKey: ['facilitators'] });
-      queryClient.invalidateQueries({ queryKey: ['subscription'] });
-      queryClient.invalidateQueries({ queryKey: ['billingWallet'] });
-      onSuccess(facilitator);
+      // Close modal and reset form
       onOpenChange(false);
       setName('');
       setDomain('');
     },
     onError: (error) => {
       toast({
-        title: 'Failed to create facilitator',
+        title: 'Failed to start facilitator creation',
         description: error instanceof Error ? error.message : 'Something went wrong',
         variant: 'destructive',
       });
     },
   });
 
-  const handleCreate = () => {
+  const handlePayAndCreate = () => {
     if (!name.trim() || !domain.trim()) return;
-    createMutation.mutate({
+    pendingMutation.mutate({
       name: name.trim(),
       customDomain: domain.trim(),
     });
   };
 
-  const handleSubscribe = () => {
-    // Open payment link - webhook will activate subscription
-    window.open(SUBSCRIPTION_PAYMENT_URL, '_blank');
-  };
-
-  // Loading state
-  if (subscriptionLoading) {
-    return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-lg">
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-6 h-6 animate-spin" />
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
-
-  // No subscription - show subscribe prompt
-  if (!hasActiveSubscription) {
-    return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Subscribe to Create Facilitators</DialogTitle>
-            <DialogDescription>
-              A subscription is required to create and manage your own facilitators.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="bg-muted/50 rounded-lg p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm">Monthly subscription</span>
-                <span className="font-semibold">$5.00 USDC</span>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Create unlimited facilitators with your own domains.
-              </p>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSubscribe}>
-              <ExternalLink className="w-4 h-4 mr-2" />
-              Subscribe Now
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    );
-  }
-
-  // Has subscription - show create form
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
@@ -178,6 +108,16 @@ export function CreateFacilitatorModal({
               You'll need to configure DNS after creation
             </p>
           </div>
+
+          <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm">Cost</span>
+              <span className="font-semibold">$5.00 USDC/month</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Pay via x402 to activate your facilitator. Your facilitator will be created automatically after payment.
+            </p>
+          </div>
         </div>
 
         <DialogFooter>
@@ -185,16 +125,19 @@ export function CreateFacilitatorModal({
             Cancel
           </Button>
           <Button
-            onClick={handleCreate}
-            disabled={!name.trim() || !domain.trim() || createMutation.isPending}
+            onClick={handlePayAndCreate}
+            disabled={!name.trim() || !domain.trim() || pendingMutation.isPending}
           >
-            {createMutation.isPending ? (
+            {pendingMutation.isPending ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Creating...
+                Preparing...
               </>
             ) : (
-              'Create Facilitator'
+              <>
+                <ExternalLink className="w-4 h-4 mr-2" />
+                Pay $5 & Create
+              </>
             )}
           </Button>
         </DialogFooter>

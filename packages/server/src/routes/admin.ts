@@ -26,6 +26,11 @@ import {
   deleteWebhook,
   regenerateWebhookSecret,
 } from '../db/webhooks.js';
+import {
+  createPendingFacilitator,
+  getPendingFacilitatorByUserId,
+  deletePendingFacilitatorsForUser,
+} from '../db/pending-facilitators.js';
 import { getDatabase } from '../db/index.js';
 import { 
   defaultTokens, 
@@ -165,6 +170,42 @@ router.post('/wallet/create', requireAuth, async (req: Request, res: Response) =
   } catch (error) {
     console.error('Create wallet error:', error);
     res.status(500).json({ error: 'Failed to create wallet' });
+  }
+});
+
+/**
+ * POST /api/admin/pending-facilitator - Save a pending facilitator request (before payment)
+ */
+router.post('/pending-facilitator', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { name, customDomain } = req.body;
+
+    if (!name || !customDomain) {
+      res.status(400).json({ error: 'Name and customDomain are required' });
+      return;
+    }
+
+    const userId = req.user!.id;
+    const subdomain = customDomain.replace(/\./g, '-');
+
+    // Delete any existing pending facilitators for this user
+    deletePendingFacilitatorsForUser(userId);
+
+    // Create new pending facilitator
+    const pending = createPendingFacilitator(userId, name, customDomain, subdomain);
+
+    console.log(`[Pending Facilitator] Created pending request for user ${userId}: ${name} (${customDomain})`);
+
+    res.status(201).json({
+      id: pending.id,
+      name: pending.name,
+      customDomain: pending.custom_domain,
+      subdomain: pending.subdomain,
+      createdAt: pending.created_at,
+    });
+  } catch (error) {
+    console.error('Create pending facilitator error:', error);
+    res.status(500).json({ error: 'Failed to create pending facilitator request' });
   }
 });
 
