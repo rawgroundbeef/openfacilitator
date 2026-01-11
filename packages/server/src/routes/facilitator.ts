@@ -962,7 +962,7 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
           scheme: 'exact',
           network: NETWORK,
           payload: {
-            signedTransaction: signedTxBase64
+            transaction: signedTxBase64
           }
         };
 
