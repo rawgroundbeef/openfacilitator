@@ -252,12 +252,19 @@ export default function Home() {
             to give your facilitator access to discoverable, verified endpoints out of the box. Your agents can find paid APIs programmatically.
           </p>
 
-          <div className="flex items-center gap-4 p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 mb-6">
-            <code className="text-gray-900 dark:text-gray-100 flex-1 font-mono text-sm sm:text-base whitespace-nowrap overflow-hidden text-ellipsis">
+          <a
+            href="https://api.openfacilitator.io/discovery/resources"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-between gap-4 p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 mb-6 hover:border-primary/50 transition-colors group"
+          >
+            <code className="text-gray-900 dark:text-gray-100 font-mono text-sm sm:text-base">
               GET /discovery/resources
             </code>
-            <CopyButton text="https://api.openfacilitator.io/discovery/resources" label="Copy URL" />
-          </div>
+            <span className="text-muted-foreground group-hover:text-primary transition-colors text-sm flex items-center gap-1">
+              View <ArrowRight className="w-4 h-4" />
+            </span>
+          </a>
 
           <p className="text-sm text-muted-foreground text-center">
             Hundreds of verified x402-enabled APIs with payment requirements. No auth needed.{' '}
