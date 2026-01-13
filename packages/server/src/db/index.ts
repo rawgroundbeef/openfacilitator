@@ -87,6 +87,18 @@ export function initializeDatabase(dbPath?: string): Database.Database {
       db.exec("ALTER TABLE payment_links ADD COLUMN webhook_id TEXT REFERENCES webhooks(id) ON DELETE SET NULL");
       console.log('✅ Added webhook_id column to payment_links table');
     }
+
+    // Add unified link columns (link_type, slug, method, headers_forward)
+    const hasLinkType = paymentLinksColumns.some(col => col.name === 'link_type');
+    if (paymentLinksColumns.length > 0 && !hasLinkType) {
+      db.exec("ALTER TABLE payment_links ADD COLUMN link_type TEXT NOT NULL DEFAULT 'payment'");
+      db.exec("ALTER TABLE payment_links ADD COLUMN slug TEXT");
+      db.exec("ALTER TABLE payment_links ADD COLUMN method TEXT NOT NULL DEFAULT 'GET'");
+      db.exec("ALTER TABLE payment_links ADD COLUMN headers_forward TEXT NOT NULL DEFAULT '[]'");
+      // Generate slugs for existing links using their ID
+      db.exec("UPDATE payment_links SET slug = id WHERE slug IS NULL");
+      console.log('✅ Added unified link columns (link_type, slug, method, headers_forward)');
+    }
   } catch (e) {
     // Table might not exist yet, that's fine
   }
@@ -270,23 +282,28 @@ export function initializeDatabase(dbPath?: string): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_subscriptions_expires ON subscriptions(expires_at);
     CREATE INDEX IF NOT EXISTS idx_subscriptions_tx_hash ON subscriptions(tx_hash);
 
-    -- Payment Links table (shareable payment URLs)
+    -- Payment Links table (unified links - payment, redirect, or proxy)
     CREATE TABLE IF NOT EXISTS payment_links (
       id TEXT PRIMARY KEY,
       facilitator_id TEXT NOT NULL REFERENCES facilitators(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       description TEXT,
+      slug TEXT,
+      link_type TEXT NOT NULL DEFAULT 'payment',
       amount TEXT NOT NULL,
       asset TEXT NOT NULL,
       network TEXT NOT NULL,
       pay_to_address TEXT NOT NULL,
       success_redirect_url TEXT,
+      method TEXT NOT NULL DEFAULT 'GET',
+      headers_forward TEXT NOT NULL DEFAULT '[]',
       webhook_id TEXT REFERENCES webhooks(id) ON DELETE SET NULL,
       webhook_url TEXT,
       webhook_secret TEXT,
       active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(facilitator_id, slug)
     );
 
     -- Payment Link Payments table (track payments made via links)
@@ -303,6 +320,7 @@ export function initializeDatabase(dbPath?: string): Database.Database {
 
     CREATE INDEX IF NOT EXISTS idx_payment_links_facilitator ON payment_links(facilitator_id);
     CREATE INDEX IF NOT EXISTS idx_payment_links_active ON payment_links(active);
+    CREATE INDEX IF NOT EXISTS idx_payment_links_slug ON payment_links(facilitator_id, slug);
     CREATE INDEX IF NOT EXISTS idx_payment_link_payments_link ON payment_link_payments(payment_link_id);
     CREATE INDEX IF NOT EXISTS idx_payment_link_payments_status ON payment_link_payments(status);
 
@@ -379,6 +397,15 @@ export * from './subscriptions.js';
 export * from './payment-links.js';
 export * from './webhooks.js';
 export * from './pending-facilitators.js';
-export * from './proxy-urls.js';
+// Re-export proxy-urls selectively to avoid isSlugUnique conflict with payment-links
+export {
+  createProxyUrl,
+  getProxyUrlById,
+  getProxyUrlBySlug,
+  getProxyUrlsByFacilitator,
+  updateProxyUrl,
+  deleteProxyUrl,
+  isSlugUnique as isProxySlugUnique,
+} from './proxy-urls.js';
 export * from './types.js';
 

@@ -44,7 +44,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { api, type PaymentLink, type Facilitator, type Webhook } from '@/lib/api';
+import { api, type PaymentLink, type Facilitator, type Webhook, type LinkType } from '@/lib/api';
 import { formatAddress } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 
@@ -92,11 +92,15 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
   // Form state
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [slug, setSlug] = useState('');
+  const [linkType, setLinkType] = useState<LinkType>('payment');
   const [amount, setAmount] = useState('');
   const [network, setNetwork] = useState('base');
   const [asset, setAsset] = useState(TOKEN_OPTIONS['base'][0].address);
   const [payToAddress, setPayToAddress] = useState('');
   const [successRedirectUrl, setSuccessRedirectUrl] = useState('');
+  const [method, setMethod] = useState<'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'ANY'>('GET');
+  const [headersForward, setHeadersForward] = useState('');
   const [selectedWebhookId, setSelectedWebhookId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
@@ -114,11 +118,15 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
       api.createPaymentLink(facilitatorId, {
         name,
         description: description || undefined,
+        slug: slug || undefined,
+        linkType,
         amount: parseAmountToAtomic(amount),
         asset,
         network,
         payToAddress,
         successRedirectUrl: successRedirectUrl || undefined,
+        method: linkType === 'proxy' ? method : undefined,
+        headersForward: linkType === 'proxy' && headersForward ? headersForward.split(',').map(h => h.trim()).filter(Boolean) : undefined,
         webhookId: selectedWebhookId || undefined,
       }),
     onSuccess: () => {
@@ -148,11 +156,15 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
   const resetForm = () => {
     setName('');
     setDescription('');
+    setSlug('');
+    setLinkType('payment');
     setAmount('');
     setNetwork('base');
     setAsset(TOKEN_OPTIONS['base'][0].address);
     setPayToAddress('');
     setSuccessRedirectUrl('');
+    setMethod('GET');
+    setHeadersForward('');
     setSelectedWebhookId(null);
   };
 
@@ -185,11 +197,15 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
     setEditingLink(link);
     setName(link.name);
     setDescription(link.description || '');
+    setSlug(link.slug || '');
+    setLinkType(link.linkType || 'payment');
     setAmount(formatAmount(link.amount));
     setNetwork(link.network);
     setAsset(link.asset);
     setPayToAddress(link.payToAddress);
     setSuccessRedirectUrl(link.successRedirectUrl || '');
+    setMethod(link.method as typeof method || 'GET');
+    setHeadersForward(link.headersForward?.join(', ') || '');
     setSelectedWebhookId(link.webhookId);
     setIsEditOpen(true);
   };
@@ -201,11 +217,15 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
       updates: {
         name,
         description: description || null,
+        slug: slug || undefined,
+        linkType,
         amount: parseAmountToAtomic(amount),
         asset,
         network,
         payToAddress,
         successRedirectUrl: successRedirectUrl || null,
+        method: linkType === 'proxy' ? method : undefined,
+        headersForward: linkType === 'proxy' && headersForward ? headersForward.split(',').map(h => h.trim()).filter(Boolean) : undefined,
         webhookId: selectedWebhookId,
       },
     });
@@ -250,10 +270,10 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
           <div>
             <CardTitle className="flex items-center gap-2">
               <Link2 className="w-4 h-4" />
-              Payment Links
+              Links
             </CardTitle>
             <CardDescription>
-              Create shareable links to collect payments
+              Create payment links, redirects, or API proxies
             </CardDescription>
           </div>
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
@@ -263,32 +283,65 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
                 Create Link
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-lg">
               <DialogHeader>
-                <DialogTitle>Create Payment Link</DialogTitle>
+                <DialogTitle>Create Link</DialogTitle>
                 <DialogDescription>
-                  Create a shareable link to collect payments.
+                  Create a payment link, redirect, or API proxy.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Name</Label>
-                  <Input
-                    id="name"
-                    placeholder="e.g., Product Purchase"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Name</Label>
+                    <Input
+                      id="name"
+                      placeholder="e.g., Product Purchase"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="linkType">Link Type</Label>
+                    <Select value={linkType} onValueChange={(v) => setLinkType(v as LinkType)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="payment">Payment</SelectItem>
+                        <SelectItem value="redirect">Redirect</SelectItem>
+                        <SelectItem value="proxy">Proxy</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {linkType === 'payment' && 'Show success page after payment'}
+                      {linkType === 'redirect' && 'Redirect to URL after payment'}
+                      {linkType === 'proxy' && 'Forward request to URL after payment'}
+                    </p>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description (optional)</Label>
-                  <Textarea
-                    id="description"
-                    placeholder="What is this payment for?"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    rows={2}
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="slug">URL Slug (optional)</Label>
+                    <Input
+                      id="slug"
+                      placeholder="my-product"
+                      value={slug}
+                      onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Custom URL path for your link
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="description">Description</Label>
+                    <Input
+                      id="description"
+                      placeholder="What is this payment for?"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                    />
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -331,19 +384,58 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
                     Wallet address to receive payments (separate from facilitator wallet)
                   </p>
                 </div>
+                {/* Target URL - required for redirect/proxy, optional for payment */}
                 <div className="space-y-2">
-                  <Label htmlFor="redirectUrl">Success Redirect URL (optional)</Label>
+                  <Label htmlFor="redirectUrl">
+                    {linkType === 'payment' ? 'Success Redirect URL (optional)' : 'Target URL'}
+                  </Label>
                   <Input
                     id="redirectUrl"
                     type="url"
-                    placeholder="https://yoursite.com/thank-you"
+                    placeholder={linkType === 'proxy' ? 'https://api.example.com/endpoint' : 'https://yoursite.com/thank-you'}
                     value={successRedirectUrl}
                     onChange={(e) => setSuccessRedirectUrl(e.target.value)}
                   />
                   <p className="text-xs text-muted-foreground">
-                    Redirect users here after successful payment
+                    {linkType === 'payment' && 'Redirect users here after successful payment'}
+                    {linkType === 'redirect' && 'URL to redirect to after payment (required)'}
+                    {linkType === 'proxy' && 'URL to forward requests to after payment (required)'}
                   </p>
                 </div>
+
+                {/* Proxy-specific fields */}
+                {linkType === 'proxy' && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="method">HTTP Method</Label>
+                      <Select value={method} onValueChange={(v) => setMethod(v as typeof method)}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="GET">GET</SelectItem>
+                          <SelectItem value="POST">POST</SelectItem>
+                          <SelectItem value="PUT">PUT</SelectItem>
+                          <SelectItem value="DELETE">DELETE</SelectItem>
+                          <SelectItem value="PATCH">PATCH</SelectItem>
+                          <SelectItem value="ANY">ANY</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="headers">Forward Headers</Label>
+                      <Input
+                        id="headers"
+                        placeholder="Authorization, X-Custom-Header"
+                        value={headersForward}
+                        onChange={(e) => setHeadersForward(e.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Comma-separated list of headers to forward
+                      </p>
+                    </div>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="webhook">Webhook (optional)</Label>
                   <Select
@@ -382,7 +474,7 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
                 </Button>
                 <Button
                   onClick={() => createMutation.mutate()}
-                  disabled={!name || !amount || !payToAddress || createMutation.isPending}
+                  disabled={!name || !amount || !payToAddress || ((linkType === 'redirect' || linkType === 'proxy') && !successRedirectUrl) || createMutation.isPending}
                 >
                   {createMutation.isPending ? (
                     <>
@@ -417,6 +509,12 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-medium truncate">{link.name}</span>
+                    <Badge variant={
+                      link.linkType === 'payment' ? 'default' :
+                      link.linkType === 'redirect' ? 'secondary' : 'outline'
+                    } className="text-xs py-0">
+                      {link.linkType || 'payment'}
+                    </Badge>
                     {!link.active && (
                       <span className="text-xs bg-muted px-2 py-0.5 rounded">Inactive</span>
                     )}
@@ -426,6 +524,7 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
                       ${formatAmount(link.amount)} {getTokenSymbol(link.network, link.asset)}
                     </span>
                     <span className="capitalize">{link.network}</span>
+                    {link.slug && <span className="font-mono text-xs">/{link.slug}</span>}
                     {link.stats && (
                       <span>
                         {link.stats.successfulPayments} payment{link.stats.successfulPayments !== 1 ? 's' : ''}
@@ -635,7 +734,7 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
             </Button>
             <Button
               onClick={handleUpdateLink}
-              disabled={!name || !amount || !payToAddress || updateMutation.isPending}
+              disabled={!name || !amount || !payToAddress || ((linkType === 'redirect' || linkType === 'proxy') && !successRedirectUrl) || updateMutation.isPending}
             >
               {updateMutation.isPending ? (
                 <>

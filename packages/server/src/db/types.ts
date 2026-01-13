@@ -100,21 +100,25 @@ export interface MultiSettleSettlementRecord {
 
 /**
  * Payment link database record
- * Shareable payment URLs (like Stripe Payment Links)
+ * Unified links - can be payment, redirect, or proxy type
  */
 export interface PaymentLinkRecord {
   id: string;
   facilitator_id: string;
   name: string;
   description: string | null;
+  slug: string | null;         // URL slug (e.g., /pay/my-product)
+  link_type: 'payment' | 'redirect' | 'proxy';  // What happens after payment
   amount: string;              // Atomic units (e.g., "1000000" for $1 USDC)
   asset: string;               // Token contract address
   network: string;             // e.g., 'base', 'base-sepolia', 'solana'
-  pay_to_address: string;      // Wallet address to receive payments (separate from facilitator wallet)
-  success_redirect_url: string | null;  // Optional redirect after payment
-  webhook_id: string | null;            // Reference to webhooks table
-  webhook_url: string | null;           // Optional per-link webhook (deprecated, use webhook_id)
-  webhook_secret: string | null;        // (deprecated, use webhook_id)
+  pay_to_address: string;      // Wallet address to receive payments
+  success_redirect_url: string | null;  // Target URL (redirect or proxy target)
+  method: string;              // HTTP method for proxy type (GET, POST, etc.)
+  headers_forward: string;     // JSON array of headers to forward for proxy type
+  webhook_id: string | null;   // Reference to webhooks table
+  webhook_url: string | null;  // (deprecated, use webhook_id)
+  webhook_secret: string | null; // (deprecated, use webhook_id)
   active: number;              // 0 = inactive, 1 = active
   created_at: string;
   updated_at: string;

@@ -6,6 +6,8 @@ import { createTransaction, updateTransactionStatus } from '../db/transactions.j
 import { getFacilitatorById } from '../db/facilitators.js';
 import {
   getPaymentLinkById,
+  getPaymentLinkByIdOrSlug,
+  getPaymentLinkBySlug,
   createPaymentLinkPayment,
   updatePaymentLinkPaymentStatus,
 } from '../db/payment-links.js';
@@ -490,7 +492,13 @@ router.post('/settle', requireFacilitator, async (req: Request, res: Response) =
  * - With X-Payment header → verify, settle, record payment, return success
  */
 router.get('/pay/:linkId', async (req: Request, res: Response) => {
-  const link = getPaymentLinkById(req.params.linkId);
+  // Try to get link by ID first, then by slug if we have facilitator context
+  const facilitatorId = req.facilitator?.id;
+  let link = getPaymentLinkById(req.params.linkId);
+  if (!link && facilitatorId) {
+    link = getPaymentLinkBySlug(facilitatorId, req.params.linkId);
+  }
+
   const acceptHeader = req.get('Accept') || '';
   const paymentHeader = req.get('X-Payment');
   const wantsJson = acceptHeader.includes('application/json') || paymentHeader;
@@ -698,13 +706,60 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
         });
       }
 
-      // Return success with payment details
-      res.json({
+      // Handle response based on link type
+      if (link.link_type === 'proxy' && link.success_redirect_url) {
+        // For proxy type: forward request to target URL and return response
+        const headersForward = JSON.parse(link.headers_forward || '[]') as string[];
+        const forwardHeaders: Record<string, string> = {
+          'Content-Type': req.get('Content-Type') || 'application/json',
+        };
+
+        for (const header of headersForward) {
+          const value = req.get(header);
+          if (value) {
+            forwardHeaders[header] = value;
+          }
+        }
+
+        try {
+          const targetResponse = await fetch(link.success_redirect_url, {
+            method: link.method || 'GET',
+            headers: forwardHeaders,
+            body: ['GET', 'HEAD'].includes(link.method || 'GET') ? undefined : JSON.stringify(req.body),
+          });
+
+          const targetContentType = targetResponse.headers.get('Content-Type') || 'application/json';
+          const targetBody = await targetResponse.text();
+
+          res.setHeader('Content-Type', targetContentType);
+          res.setHeader('X-Payment-TxHash', settleResult.transactionHash || '');
+          res.status(targetResponse.status).send(targetBody);
+          return;
+        } catch (proxyError) {
+          console.error('[x402 Proxy] Error forwarding request:', proxyError);
+          res.status(502).json({
+            error: 'Proxy error',
+            message: 'Payment succeeded but failed to forward to target',
+            transactionHash: settleResult.transactionHash,
+          });
+          return;
+        }
+      }
+
+      // Return success with payment details (for payment and redirect types)
+      const response: Record<string, unknown> = {
         success: true,
         transactionHash: settleResult.transactionHash,
         paymentId: payment.id,
         message: 'Payment successful',
-      });
+      };
+
+      // Include redirect URL for redirect type
+      if (link.link_type === 'redirect' && link.success_redirect_url) {
+        response.redirectUrl = link.success_redirect_url;
+      }
+
+      res.json(response);
       return;
 
     } catch (error) {
@@ -1536,7 +1591,12 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
  * GET /pay/:linkId/requirements - Get payment requirements for a payment link
  */
 router.get('/pay/:linkId/requirements', async (req: Request, res: Response) => {
-  const link = getPaymentLinkById(req.params.linkId);
+  // Try to get link by ID first, then by slug if we have facilitator context
+  const facilitatorId = req.facilitator?.id;
+  let link = getPaymentLinkById(req.params.linkId);
+  if (!link && facilitatorId) {
+    link = getPaymentLinkBySlug(facilitatorId, req.params.linkId);
+  }
 
   if (!link) {
     res.status(404).json({ error: 'Payment link not found' });
@@ -1610,7 +1670,12 @@ router.get('/pay/:linkId/requirements', async (req: Request, res: Response) => {
  * POST /pay/:linkId/complete - Record a completed payment
  */
 router.post('/pay/:linkId/complete', async (req: Request, res: Response) => {
-  const link = getPaymentLinkById(req.params.linkId);
+  // Try to get link by ID first, then by slug if we have facilitator context
+  const facilitatorId = req.facilitator?.id;
+  let link = getPaymentLinkById(req.params.linkId);
+  if (!link && facilitatorId) {
+    link = getPaymentLinkBySlug(facilitatorId, req.params.linkId);
+  }
 
   if (!link) {
     res.status(404).json({ error: 'Payment link not found' });

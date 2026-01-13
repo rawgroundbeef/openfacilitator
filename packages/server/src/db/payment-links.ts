@@ -9,21 +9,26 @@ export function createPaymentLink(data: {
   facilitator_id: string;
   name: string;
   description?: string;
+  slug?: string;
+  link_type?: 'payment' | 'redirect' | 'proxy';
   amount: string;
   asset: string;
   network: string;
   pay_to_address: string;
   success_redirect_url?: string;
+  method?: string;
+  headers_forward?: string[];
   webhook_id?: string;
   webhook_url?: string;
   webhook_secret?: string;
 }): PaymentLinkRecord {
   const db = getDatabase();
   const id = nanoid();
+  const slug = data.slug || id; // Default to ID if no slug provided
 
   const stmt = db.prepare(`
-    INSERT INTO payment_links (id, facilitator_id, name, description, amount, asset, network, pay_to_address, success_redirect_url, webhook_id, webhook_url, webhook_secret)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO payment_links (id, facilitator_id, name, description, slug, link_type, amount, asset, network, pay_to_address, success_redirect_url, method, headers_forward, webhook_id, webhook_url, webhook_secret)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   stmt.run(
@@ -31,11 +36,15 @@ export function createPaymentLink(data: {
     data.facilitator_id,
     data.name,
     data.description || null,
+    slug,
+    data.link_type || 'payment',
     data.amount,
     data.asset,
     data.network,
     data.pay_to_address,
     data.success_redirect_url || null,
+    data.method || 'GET',
+    JSON.stringify(data.headers_forward || []),
     data.webhook_id || null,
     data.webhook_url || null,
     data.webhook_secret || null
@@ -51,6 +60,38 @@ export function getPaymentLinkById(id: string): PaymentLinkRecord | null {
   const db = getDatabase();
   const stmt = db.prepare('SELECT * FROM payment_links WHERE id = ?');
   return (stmt.get(id) as PaymentLinkRecord) || null;
+}
+
+/**
+ * Get a payment link by ID or slug
+ */
+export function getPaymentLinkByIdOrSlug(facilitatorId: string, idOrSlug: string): PaymentLinkRecord | null {
+  const db = getDatabase();
+  // Try by ID first, then by slug
+  const stmt = db.prepare('SELECT * FROM payment_links WHERE (id = ? OR (facilitator_id = ? AND slug = ?))');
+  return (stmt.get(idOrSlug, facilitatorId, idOrSlug) as PaymentLinkRecord) || null;
+}
+
+/**
+ * Get a payment link by slug
+ */
+export function getPaymentLinkBySlug(facilitatorId: string, slug: string): PaymentLinkRecord | null {
+  const db = getDatabase();
+  const stmt = db.prepare('SELECT * FROM payment_links WHERE facilitator_id = ? AND slug = ?');
+  return (stmt.get(facilitatorId, slug) as PaymentLinkRecord) || null;
+}
+
+/**
+ * Check if slug is unique for facilitator
+ */
+export function isSlugUnique(facilitatorId: string, slug: string, excludeId?: string): boolean {
+  const db = getDatabase();
+  if (excludeId) {
+    const stmt = db.prepare('SELECT id FROM payment_links WHERE facilitator_id = ? AND slug = ? AND id != ?');
+    return !stmt.get(facilitatorId, slug, excludeId);
+  }
+  const stmt = db.prepare('SELECT id FROM payment_links WHERE facilitator_id = ? AND slug = ?');
+  return !stmt.get(facilitatorId, slug);
 }
 
 /**
@@ -79,11 +120,15 @@ export function updatePaymentLink(
   updates: Partial<{
     name: string;
     description: string | null;
+    slug: string;
+    link_type: 'payment' | 'redirect' | 'proxy';
     amount: string;
     asset: string;
     network: string;
     pay_to_address: string;
     success_redirect_url: string | null;
+    method: string;
+    headers_forward: string[];
     webhook_id: string | null;
     webhook_url: string | null;
     webhook_secret: string | null;
@@ -102,6 +147,14 @@ export function updatePaymentLink(
   if (updates.description !== undefined) {
     fields.push('description = ?');
     values.push(updates.description);
+  }
+  if (updates.slug !== undefined) {
+    fields.push('slug = ?');
+    values.push(updates.slug);
+  }
+  if (updates.link_type !== undefined) {
+    fields.push('link_type = ?');
+    values.push(updates.link_type);
   }
   if (updates.amount !== undefined) {
     fields.push('amount = ?');
@@ -122,6 +175,14 @@ export function updatePaymentLink(
   if (updates.success_redirect_url !== undefined) {
     fields.push('success_redirect_url = ?');
     values.push(updates.success_redirect_url);
+  }
+  if (updates.method !== undefined) {
+    fields.push('method = ?');
+    values.push(updates.method);
+  }
+  if (updates.headers_forward !== undefined) {
+    fields.push('headers_forward = ?');
+    values.push(JSON.stringify(updates.headers_forward));
   }
   if (updates.webhook_id !== undefined) {
     fields.push('webhook_id = ?');

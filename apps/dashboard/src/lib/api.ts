@@ -185,15 +185,21 @@ export interface ProxyUrlsResponse {
   urls: ProxyUrl[];
 }
 
+export type LinkType = 'payment' | 'redirect' | 'proxy';
+
 export interface PaymentLink {
   id: string;
   name: string;
   description: string | null;
+  slug: string | null;
+  linkType: LinkType;
   amount: string;
   asset: string;
   network: string;
   payToAddress: string;
   successRedirectUrl: string | null;
+  method: string;
+  headersForward: string[];
   webhookId: string | null;
   webhookUrl: string | null;
   active: boolean;
@@ -220,11 +226,15 @@ export interface PaymentLinkPayment {
 export interface CreatePaymentLinkRequest {
   name: string;
   description?: string;
+  slug?: string;
+  linkType?: LinkType;
   amount: string;
   asset: string;
   network: string;
   payToAddress: string;
   successRedirectUrl?: string;
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'ANY';
+  headersForward?: string[];
   webhookId?: string;
   webhookUrl?: string;
 }
@@ -573,11 +583,15 @@ class ApiClient {
     data: Partial<{
       name: string;
       description: string | null;
+      slug: string;
+      linkType: LinkType;
       amount: string;
       asset: string;
       network: string;
       payToAddress: string;
       successRedirectUrl: string | null;
+      method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'ANY';
+      headersForward: string[];
       webhookId: string | null;
       webhookUrl: string | null;
       active: boolean;

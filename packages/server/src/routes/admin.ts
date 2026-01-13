@@ -17,6 +17,7 @@ import {
   getPaymentLinkStats,
   getPaymentLinkPayments,
   getFacilitatorPaymentLinksStats,
+  isSlugUnique,
 } from '../db/payment-links.js';
 import {
   createWebhook,
@@ -37,7 +38,7 @@ import {
   getProxyUrlsByFacilitator,
   updateProxyUrl,
   deleteProxyUrl,
-  isSlugUnique,
+  isSlugUnique as isProxySlugUnique,
 } from '../db/proxy-urls.js';
 import { getDatabase } from '../db/index.js';
 import { 
@@ -1837,11 +1838,15 @@ router.post('/facilitators/:id/webhooks/:webhookId/test', requireAuth, async (re
 const createPaymentLinkSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
+  slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/, 'Slug must be lowercase alphanumeric with dashes').optional(),
+  linkType: z.enum(['payment', 'redirect', 'proxy']).optional().default('payment'),
   amount: z.string().min(1), // Atomic units
   asset: z.string().min(1),  // Token address
   network: z.string().min(1), // e.g., 'base', 'base-sepolia', 'solana'
   payToAddress: z.string().min(1), // Wallet address to receive payments
-  successRedirectUrl: z.string().url().max(2048).optional(),
+  successRedirectUrl: z.string().url().max(2048).optional(), // Target URL for redirect/proxy
+  method: z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'ANY']).optional().default('GET'), // For proxy type
+  headersForward: z.array(z.string()).optional(), // Headers to forward for proxy type
   webhookId: z.string().optional(), // Reference to first-class webhook
   webhookUrl: z.string().url().max(2048).optional(), // Deprecated: inline webhook URL
 });
@@ -1849,26 +1854,30 @@ const createPaymentLinkSchema = z.object({
 const updatePaymentLinkSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   description: z.string().max(500).optional().nullable(),
+  slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/, 'Slug must be lowercase alphanumeric with dashes').optional(),
+  linkType: z.enum(['payment', 'redirect', 'proxy']).optional(),
   amount: z.string().min(1).optional(),
   asset: z.string().min(1).optional(),
   network: z.string().min(1).optional(),
   payToAddress: z.string().min(1).optional(),
   successRedirectUrl: z.string().url().max(2048).optional().nullable(),
+  method: z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'ANY']).optional(),
+  headersForward: z.array(z.string()).optional(),
   webhookId: z.string().optional().nullable(), // Reference to first-class webhook
   webhookUrl: z.string().url().max(2048).optional().nullable(), // Deprecated: inline webhook URL
   active: z.boolean().optional(),
 });
 
 // Helper to build payment link URL based on environment
-function getPaymentLinkUrl(subdomain: string, customDomain: string | null, linkId: string): string {
+function getPaymentLinkUrl(subdomain: string, customDomain: string | null, linkIdOrSlug: string): string {
   if (process.env.NODE_ENV === 'development') {
-    return `http://localhost:5002/pay/${linkId}`;
+    return `http://localhost:5002/pay/${linkIdOrSlug}`;
   }
   // Use custom domain if available, otherwise use subdomain
   if (customDomain) {
-    return `https://${customDomain}/pay/${linkId}`;
+    return `https://${customDomain}/pay/${linkIdOrSlug}`;
   }
-  return `https://${subdomain}.openfacilitator.io/pay/${linkId}`;
+  return `https://${subdomain}.openfacilitator.io/pay/${linkIdOrSlug}`;
 }
 
 /**
@@ -1888,19 +1897,25 @@ router.get('/facilitators/:id/payment-links', requireAuth, async (req: Request, 
     // Get stats for each link
     const linksWithStats = links.map((link) => {
       const stats = getPaymentLinkStats(link.id);
+      // Use slug for URL if available, otherwise use ID
+      const urlPath = link.slug || link.id;
       return {
         id: link.id,
         name: link.name,
         description: link.description,
+        slug: link.slug,
+        linkType: link.link_type,
         amount: link.amount,
         asset: link.asset,
         network: link.network,
         payToAddress: link.pay_to_address,
         successRedirectUrl: link.success_redirect_url,
+        method: link.method,
+        headersForward: JSON.parse(link.headers_forward || '[]'),
         webhookId: link.webhook_id,
         webhookUrl: link.webhook_url,
         active: link.active === 1,
-        url: getPaymentLinkUrl(facilitator.subdomain, facilitator.custom_domain, link.id),
+        url: getPaymentLinkUrl(facilitator.subdomain, facilitator.custom_domain, urlPath),
         stats: {
           totalPayments: stats.totalPayments,
           successfulPayments: stats.successfulPayments,
@@ -1941,6 +1956,18 @@ router.post('/facilitators/:id/payment-links', requireAuth, async (req: Request,
       return;
     }
 
+    // Validate slug uniqueness if provided
+    if (parsed.data.slug && !isSlugUnique(req.params.id, parsed.data.slug)) {
+      res.status(400).json({ error: 'Slug already in use' });
+      return;
+    }
+
+    // Validate that proxy/redirect types have a target URL
+    if ((parsed.data.linkType === 'proxy' || parsed.data.linkType === 'redirect') && !parsed.data.successRedirectUrl) {
+      res.status(400).json({ error: `${parsed.data.linkType} type requires a target URL` });
+      return;
+    }
+
     // Generate webhook secret if webhook URL provided
     let webhookSecret: string | undefined;
     if (parsed.data.webhookUrl) {
@@ -1951,29 +1978,40 @@ router.post('/facilitators/:id/payment-links', requireAuth, async (req: Request,
       facilitator_id: req.params.id,
       name: parsed.data.name,
       description: parsed.data.description,
+      slug: parsed.data.slug,
+      link_type: parsed.data.linkType,
       amount: parsed.data.amount,
       asset: parsed.data.asset,
       network: parsed.data.network,
       pay_to_address: parsed.data.payToAddress,
       success_redirect_url: parsed.data.successRedirectUrl,
+      method: parsed.data.method,
+      headers_forward: parsed.data.headersForward,
       webhook_id: parsed.data.webhookId,
       webhook_url: parsed.data.webhookUrl,
       webhook_secret: webhookSecret,
     });
 
+    // Use slug for URL if available, otherwise use ID
+    const urlPath = link.slug || link.id;
+
     res.status(201).json({
       id: link.id,
       name: link.name,
       description: link.description,
+      slug: link.slug,
+      linkType: link.link_type,
       amount: link.amount,
       asset: link.asset,
       network: link.network,
       payToAddress: link.pay_to_address,
       successRedirectUrl: link.success_redirect_url,
+      method: link.method,
+      headersForward: JSON.parse(link.headers_forward || '[]'),
       webhookId: link.webhook_id,
       webhookUrl: link.webhook_url,
       active: link.active === 1,
-      url: getPaymentLinkUrl(facilitator.subdomain, facilitator.custom_domain, link.id),
+      url: getPaymentLinkUrl(facilitator.subdomain, facilitator.custom_domain, urlPath),
       createdAt: formatSqliteDate(link.created_at),
     });
   } catch (error) {
@@ -2004,19 +2042,26 @@ router.get('/facilitators/:id/payment-links/:linkId', requireAuth, async (req: R
     const offset = parseInt(req.query.offset as string) || 0;
     const payments = getPaymentLinkPayments(link.id, limit, offset);
 
+    // Use slug for URL if available, otherwise use ID
+    const urlPath = link.slug || link.id;
+
     res.json({
       id: link.id,
       name: link.name,
       description: link.description,
+      slug: link.slug,
+      linkType: link.link_type,
       amount: link.amount,
       asset: link.asset,
       network: link.network,
       payToAddress: link.pay_to_address,
       successRedirectUrl: link.success_redirect_url,
+      method: link.method,
+      headersForward: JSON.parse(link.headers_forward || '[]'),
       webhookId: link.webhook_id,
       webhookUrl: link.webhook_url,
       active: link.active === 1,
-      url: getPaymentLinkUrl(facilitator.subdomain, facilitator.custom_domain, link.id),
+      url: getPaymentLinkUrl(facilitator.subdomain, facilitator.custom_domain, urlPath),
       stats,
       payments: payments.map((p) => ({
         id: p.id,
@@ -2062,14 +2107,38 @@ router.patch('/facilitators/:id/payment-links/:linkId', requireAuth, async (req:
       return;
     }
 
+    // Validate slug uniqueness if being changed
+    if (parsed.data.slug !== undefined && parsed.data.slug !== existingLink.slug) {
+      if (!isSlugUnique(req.params.id, parsed.data.slug, existingLink.id)) {
+        res.status(400).json({ error: 'Slug already in use' });
+        return;
+      }
+    }
+
+    // Determine effective link type
+    const effectiveLinkType = parsed.data.linkType || existingLink.link_type;
+    const effectiveRedirectUrl = parsed.data.successRedirectUrl !== undefined
+      ? parsed.data.successRedirectUrl
+      : existingLink.success_redirect_url;
+
+    // Validate that proxy/redirect types have a target URL
+    if ((effectiveLinkType === 'proxy' || effectiveLinkType === 'redirect') && !effectiveRedirectUrl) {
+      res.status(400).json({ error: `${effectiveLinkType} type requires a target URL` });
+      return;
+    }
+
     const updates: Parameters<typeof updatePaymentLink>[1] = {};
     if (parsed.data.name !== undefined) updates.name = parsed.data.name;
     if (parsed.data.description !== undefined) updates.description = parsed.data.description;
+    if (parsed.data.slug !== undefined) updates.slug = parsed.data.slug;
+    if (parsed.data.linkType !== undefined) updates.link_type = parsed.data.linkType;
     if (parsed.data.amount !== undefined) updates.amount = parsed.data.amount;
     if (parsed.data.asset !== undefined) updates.asset = parsed.data.asset;
     if (parsed.data.network !== undefined) updates.network = parsed.data.network;
     if (parsed.data.payToAddress !== undefined) updates.pay_to_address = parsed.data.payToAddress;
     if (parsed.data.successRedirectUrl !== undefined) updates.success_redirect_url = parsed.data.successRedirectUrl;
+    if (parsed.data.method !== undefined) updates.method = parsed.data.method;
+    if (parsed.data.headersForward !== undefined) updates.headers_forward = parsed.data.headersForward;
     if (parsed.data.webhookId !== undefined) updates.webhook_id = parsed.data.webhookId;
     if (parsed.data.webhookUrl !== undefined) {
       updates.webhook_url = parsed.data.webhookUrl;
@@ -2086,19 +2155,26 @@ router.patch('/facilitators/:id/payment-links/:linkId', requireAuth, async (req:
       return;
     }
 
+    // Use slug for URL if available, otherwise use ID
+    const urlPath = link.slug || link.id;
+
     res.json({
       id: link.id,
       name: link.name,
       description: link.description,
+      slug: link.slug,
+      linkType: link.link_type,
       amount: link.amount,
       asset: link.asset,
       network: link.network,
       payToAddress: link.pay_to_address,
       successRedirectUrl: link.success_redirect_url,
+      method: link.method,
+      headersForward: JSON.parse(link.headers_forward || '[]'),
       webhookId: link.webhook_id,
       webhookUrl: link.webhook_url,
       active: link.active === 1,
-      url: getPaymentLinkUrl(facilitator.subdomain, facilitator.custom_domain, link.id),
+      url: getPaymentLinkUrl(facilitator.subdomain, facilitator.custom_domain, urlPath),
       createdAt: formatSqliteDate(link.created_at),
       updatedAt: formatSqliteDate(link.updated_at),
     });
@@ -2235,7 +2311,7 @@ router.post('/facilitators/:id/urls', requireAuth, async (req: Request, res: Res
     }
 
     // Check slug uniqueness
-    if (!isSlugUnique(req.params.id, parsed.data.slug)) {
+    if (!isProxySlugUnique(req.params.id, parsed.data.slug)) {
       res.status(400).json({ error: 'Slug already exists for this facilitator' });
       return;
     }
@@ -2340,7 +2416,7 @@ router.patch('/facilitators/:id/urls/:urlId', requireAuth, async (req: Request, 
     }
 
     // Check slug uniqueness if being updated
-    if (parsed.data.slug && !isSlugUnique(req.params.id, parsed.data.slug, req.params.urlId)) {
+    if (parsed.data.slug && !isProxySlugUnique(req.params.id, parsed.data.slug, req.params.urlId)) {
       res.status(400).json({ error: 'Slug already exists for this facilitator' });
       return;
     }
