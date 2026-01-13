@@ -876,7 +876,9 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
   }
 
   // === Check for valid access cookie (browser flow) ===
+  console.log('[Browser Flow] Checking access:', { linkId: link.id, linkType: link.link_type, accessTtl: link.access_ttl, hasValidAccess, cookieName: `x402_access_${link.id}`, hasCookie: !!accessToken });
   if (hasValidAccess) {
+    console.log('[Browser Flow] Valid access cookie found, handling link type:', link.link_type);
     // For proxy type: fetch and return the content directly
     if (link.link_type === 'proxy' && link.success_redirect_url) {
       try {
@@ -1311,6 +1313,9 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
     const SUCCESS_REDIRECT = ${link.success_redirect_url ? `'${link.success_redirect_url}'` : 'null'};
     const IS_SOLANA = NETWORK === 'solana' || NETWORK === 'solana-devnet' || NETWORK.startsWith('solana:');
 
+    // Debug logging
+    console.log('[PaymentPage] LINK_TYPE:', LINK_TYPE, 'ACCESS_TTL:', ACCESS_TTL, 'SUCCESS_REDIRECT:', SUCCESS_REDIRECT);
+
     // Capture URL params for metadata (e.g., pendingId for facilitator creation)
     const urlParams = new URLSearchParams(window.location.search);
     const METADATA = {};
@@ -1485,21 +1490,24 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
         const settleResult = await settleRes.json();
 
         if (settleResult.success) {
-          // Record the payment
-          await fetch('/pay/' + LINK_ID + '/complete', {
+          // Record the payment (include credentials so cookie is stored)
+          const completeRes = await fetch('/pay/' + LINK_ID + '/complete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
             body: JSON.stringify({
               payerAddress: userPublicKey,
               transactionHash: settleResult.transactionHash,
               metadata: Object.keys(METADATA).length > 0 ? METADATA : undefined
             })
           });
+          console.log('Complete response:', completeRes.status, 'headers:', [...completeRes.headers.entries()]);
 
           showStatus('Payment successful!', 'success');
 
           // For proxy links with access_ttl, reload to show the proxied content
           if (LINK_TYPE === 'proxy' && ACCESS_TTL > 0) {
+            console.log('Proxy link with access_ttl, reloading in 1.5s...');
             showStatus('Payment successful! Loading content...', 'success');
             setTimeout(() => { window.location.reload(); }, 1500);
           } else if (LINK_TYPE === 'redirect' && SUCCESS_REDIRECT) {
@@ -1695,21 +1703,24 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
           throw new Error('Transaction failed');
         }
 
-        // Record the payment
-        await fetch('/pay/' + LINK_ID + '/complete', {
+        // Record the payment (include credentials so cookie is stored)
+        const completeRes = await fetch('/pay/' + LINK_ID + '/complete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
           body: JSON.stringify({
             payerAddress: userAddress,
             transactionHash: txHash,
             metadata: Object.keys(METADATA).length > 0 ? METADATA : undefined
           })
         });
+        console.log('Complete response:', completeRes.status, 'headers:', [...completeRes.headers.entries()]);
 
         showStatus('Payment successful!', 'success');
 
         // For proxy links with access_ttl, reload to show the proxied content
         if (LINK_TYPE === 'proxy' && ACCESS_TTL > 0) {
+          console.log('Proxy link with access_ttl, reloading in 1.5s...');
           showStatus('Payment successful! Loading content...', 'success');
           setTimeout(() => { window.location.reload(); }, 1500);
         } else if (LINK_TYPE === 'redirect' && SUCCESS_REDIRECT) {
@@ -1862,10 +1873,13 @@ router.post('/pay/:linkId/complete', async (req: Request, res: Response) => {
   });
 
   // Set access cookie if access_ttl is configured and payment was successful
+  console.log('[Complete] Checking cookie:', { linkId: link.id, hasTransactionHash: !!transactionHash, accessTtl: link.access_ttl });
   if (transactionHash && link.access_ttl > 0) {
     const expiresAt = Math.floor(Date.now() / 1000) + link.access_ttl;
     const token = createAccessToken(link.id, expiresAt);
-    res.setHeader('Set-Cookie', `x402_access_${link.id}=${token}; Path=/; Max-Age=${link.access_ttl}; HttpOnly; SameSite=Lax${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`);
+    const cookieValue = `x402_access_${link.id}=${token}; Path=/; Max-Age=${link.access_ttl}; HttpOnly; SameSite=Lax${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`;
+    console.log('[Complete] Setting cookie:', { cookieName: `x402_access_${link.id}`, maxAge: link.access_ttl, expiresAt });
+    res.setHeader('Set-Cookie', cookieValue);
   }
 
   // Fire webhook and execute actions if configured
