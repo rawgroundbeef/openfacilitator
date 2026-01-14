@@ -159,9 +159,12 @@ async function handleStatsRequest(
     }
 
     // Settle payment
+    console.log('[Stats] Settling payment to:', FACILITATOR_URL);
     const settleResult = await facilitator.settle(paymentPayload, requirement as PaymentRequirements);
+    console.log('[Stats] Settlement result:', JSON.stringify(settleResult, null, 2));
 
     if (!settleResult.success) {
+      console.error('[Stats] Settlement FAILED:', settleResult.errorMessage);
       res.status(402).json({
         error: 'Payment settlement failed',
         reason: settleResult.errorMessage || 'Unknown settlement error',
