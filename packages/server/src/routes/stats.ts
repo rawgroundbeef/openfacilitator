@@ -70,6 +70,8 @@ const OUTPUT_SCHEMA = {
               transactionCount: { type: 'number' },
               volumeUsd: { type: 'string' },
               uniqueWallets: { type: 'number' },
+              totalSellers: { type: 'number' },
+              totalLinks: { type: 'number' },
             },
           },
         },

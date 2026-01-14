@@ -216,6 +216,8 @@ export function getGlobalStats(): {
     transactionCount: number;
     volumeUsd: string;
     uniqueWallets: number;
+    totalSellers: number;
+    totalLinks: number;
   }>;
 } {
   const db = getDatabase();
@@ -275,7 +277,7 @@ export function getGlobalStats(): {
     volume_atomic: number;
   };
 
-  // Per-facilitator breakdown
+  // Per-facilitator breakdown (includes seller count from payment_links)
   const perFacilitator = db
     .prepare(
       `
@@ -285,7 +287,9 @@ export function getGlobalStats(): {
       f.subdomain,
       COUNT(t.id) as transaction_count,
       COALESCE(SUM(CAST(t.amount AS INTEGER)), 0) as volume_atomic,
-      COUNT(DISTINCT t.from_address) as unique_wallets
+      COUNT(DISTINCT t.from_address) as unique_wallets,
+      (SELECT COUNT(DISTINCT pay_to_address) FROM payment_links WHERE facilitator_id = f.id) as total_sellers,
+      (SELECT COUNT(*) FROM payment_links WHERE facilitator_id = f.id) as total_links
     FROM facilitators f
     LEFT JOIN transactions t ON f.id = t.facilitator_id
       AND t.type = 'settle'
@@ -301,6 +305,8 @@ export function getGlobalStats(): {
     transaction_count: number;
     volume_atomic: number;
     unique_wallets: number;
+    total_sellers: number;
+    total_links: number;
   }>;
 
   return {
@@ -324,6 +330,8 @@ export function getGlobalStats(): {
       transactionCount: f.transaction_count,
       volumeUsd: (f.volume_atomic / 1_000_000).toFixed(2),
       uniqueWallets: f.unique_wallets,
+      totalSellers: f.total_sellers,
+      totalLinks: f.total_links,
     })),
   };
 }
