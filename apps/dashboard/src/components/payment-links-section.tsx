@@ -278,7 +278,7 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
               Links
             </CardTitle>
             <CardDescription>
-              Create payment links, redirects, or API proxies
+              Payment links for anything. Turn any URL into a paid URL. Works for websites, APIs, files, anything with a URL.
             </CardDescription>
           </div>
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
