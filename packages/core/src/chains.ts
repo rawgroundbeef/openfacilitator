@@ -79,6 +79,42 @@ export const defaultChains: Record<string, ChainConfig> = {
     blockExplorerUrl: 'https://www.okx.com/explorer/xlayer',
     isEVM: true,
   },
+  // Arbitrum One Mainnet
+  '42161': {
+    chainId: 42161,
+    name: 'Arbitrum One',
+    network: 'arbitrum',
+    rpcUrl: process.env.ARBITRUM_RPC_URL || 'https://arb1.arbitrum.io/rpc',
+    blockExplorerUrl: 'https://arbiscan.io',
+    isEVM: true,
+  },
+  // Optimism Mainnet
+  '10': {
+    chainId: 10,
+    name: 'Optimism',
+    network: 'optimism',
+    rpcUrl: process.env.OPTIMISM_RPC_URL || 'https://mainnet.optimism.io',
+    blockExplorerUrl: 'https://optimistic.etherscan.io',
+    isEVM: true,
+  },
+  // BNB Chain Mainnet
+  '56': {
+    chainId: 56,
+    name: 'BNB Chain',
+    network: 'bnb',
+    rpcUrl: process.env.BNB_RPC_URL || 'https://bsc-dataseed1.binance.org',
+    blockExplorerUrl: 'https://bscscan.com',
+    isEVM: true,
+  },
+  // Linea Mainnet
+  '59144': {
+    chainId: 59144,
+    name: 'Linea',
+    network: 'linea',
+    rpcUrl: process.env.LINEA_RPC_URL || 'https://rpc.linea.build',
+    blockExplorerUrl: 'https://lineascan.build',
+    isEVM: true,
+  },
   // Solana Mainnet
   solana: {
     chainId: 'solana',
@@ -145,6 +181,42 @@ export const defaultChains: Record<string, ChainConfig> = {
     blockExplorerUrl: 'https://www.okx.com/explorer/xlayer-test',
     isEVM: true,
   },
+  // Arbitrum Sepolia Testnet
+  '421614': {
+    chainId: 421614,
+    name: 'Arbitrum Sepolia',
+    network: 'arbitrum-sepolia',
+    rpcUrl: process.env.ARBITRUM_SEPOLIA_RPC_URL || 'https://sepolia-rollup.arbitrum.io/rpc',
+    blockExplorerUrl: 'https://sepolia.arbiscan.io',
+    isEVM: true,
+  },
+  // Optimism Sepolia Testnet
+  '11155420': {
+    chainId: 11155420,
+    name: 'Optimism Sepolia',
+    network: 'optimism-sepolia',
+    rpcUrl: process.env.OPTIMISM_SEPOLIA_RPC_URL || 'https://sepolia.optimism.io',
+    blockExplorerUrl: 'https://sepolia-optimism.etherscan.io',
+    isEVM: true,
+  },
+  // BNB Chain Testnet
+  '97': {
+    chainId: 97,
+    name: 'BNB Chain Testnet',
+    network: 'bnb-testnet',
+    rpcUrl: process.env.BNB_TESTNET_RPC_URL || 'https://data-seed-prebsc-1-s1.binance.org:8545',
+    blockExplorerUrl: 'https://testnet.bscscan.com',
+    isEVM: true,
+  },
+  // Linea Goerli Testnet
+  '59140': {
+    chainId: 59140,
+    name: 'Linea Goerli',
+    network: 'linea-goerli',
+    rpcUrl: process.env.LINEA_GOERLI_RPC_URL || 'https://rpc.goerli.linea.build',
+    blockExplorerUrl: 'https://goerli.lineascan.build',
+    isEVM: true,
+  },
   // Solana Devnet
   'solana-devnet': {
     chainId: 'solana-devnet',
@@ -191,6 +263,10 @@ export const networkToChainId: Record<string, number | string> = {
   polygon: 137,
   sei: 1329,
   xlayer: 196,
+  arbitrum: 42161,
+  optimism: 10,
+  bnb: 56,
+  linea: 59144,
   solana: 'solana',
   'solana-mainnet': 'solana', // Alias for compatibility
   // Testnets
@@ -200,6 +276,10 @@ export const networkToChainId: Record<string, number | string> = {
   'sei-testnet': 1328,
   sepolia: 11155111,
   'xlayer-testnet': 195,
+  'arbitrum-sepolia': 421614,
+  'optimism-sepolia': 11155420,
+  'bnb-testnet': 97,
+  'linea-goerli': 59140,
   'solana-devnet': 'solana-devnet',
 };
 
@@ -216,6 +296,10 @@ export const chainIdToNetwork: Record<string | number, string> = {
   137: 'polygon',
   1329: 'sei',
   196: 'xlayer',
+  42161: 'arbitrum',
+  10: 'optimism',
+  56: 'bnb',
+  59144: 'linea',
   solana: 'solana',
   'solana-mainnet': 'solana', // Alias
   // Testnets
@@ -225,6 +309,10 @@ export const chainIdToNetwork: Record<string | number, string> = {
   1328: 'sei-testnet',
   11155111: 'sepolia',
   195: 'xlayer-testnet',
+  421614: 'arbitrum-sepolia',
+  11155420: 'optimism-sepolia',
+  97: 'bnb-testnet',
+  59140: 'linea-goerli',
   'solana-devnet': 'solana-devnet',
 };
 
@@ -279,6 +367,10 @@ export const productionChains = [
   137,   // Polygon
   1329,  // Sei
   196,   // XLayer
+  42161, // Arbitrum
+  10,    // Optimism
+  56,    // BNB Chain
+  59144, // Linea
   'solana',
 ] as const;
 
@@ -292,6 +384,10 @@ export const testChains = [
   1328,     // Sei Testnet
   11155111, // Sepolia
   195,      // XLayer Testnet
+  421614,   // Arbitrum Sepolia
+  11155420, // Optimism Sepolia
+  97,       // BNB Chain Testnet
+  59140,    // Linea Goerli
   'solana-devnet',
 ] as const;
 
@@ -320,6 +416,10 @@ export const networkToCaip2: Record<string, string> = {
   polygon: 'eip155:137',
   sei: 'eip155:1329',
   xlayer: 'eip155:196',
+  arbitrum: 'eip155:42161',
+  optimism: 'eip155:10',
+  bnb: 'eip155:56',
+  linea: 'eip155:59144',
   // Solana
   solana: `solana:${solanaGenesisHashes.mainnet}`,
   // EVM Testnets
@@ -329,6 +429,10 @@ export const networkToCaip2: Record<string, string> = {
   'sei-testnet': 'eip155:1328',
   sepolia: 'eip155:11155111',
   'xlayer-testnet': 'eip155:195',
+  'arbitrum-sepolia': 'eip155:421614',
+  'optimism-sepolia': 'eip155:11155420',
+  'bnb-testnet': 'eip155:97',
+  'linea-goerli': 'eip155:59140',
   'solana-devnet': `solana:${solanaGenesisHashes.devnet}`,
 };
 
@@ -345,6 +449,10 @@ export const caip2ToNetwork: Record<string, string> = {
   'eip155:137': 'polygon',
   'eip155:1329': 'sei',
   'eip155:196': 'xlayer',
+  'eip155:42161': 'arbitrum',
+  'eip155:10': 'optimism',
+  'eip155:56': 'bnb',
+  'eip155:59144': 'linea',
   // Solana
   [`solana:${solanaGenesisHashes.mainnet}`]: 'solana',
   // EVM Testnets
@@ -354,6 +462,10 @@ export const caip2ToNetwork: Record<string, string> = {
   'eip155:1328': 'sei-testnet',
   'eip155:11155111': 'sepolia',
   'eip155:195': 'xlayer-testnet',
+  'eip155:421614': 'arbitrum-sepolia',
+  'eip155:11155420': 'optimism-sepolia',
+  'eip155:97': 'bnb-testnet',
+  'eip155:59140': 'linea-goerli',
   [`solana:${solanaGenesisHashes.devnet}`]: 'solana-devnet',
 };
 

@@ -58,9 +58,15 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { 
   avalanche, 
   avalancheFuji,
+  arbitrum,
+  arbitrumSepolia,
   base, 
-  baseSepolia, 
+  baseSepolia,
+  bsc,
+  bscTestnet,
   mainnet, 
+  optimism,
+  optimismSepolia,
   polygon,
   polygonAmoy,
   sepolia,
@@ -145,6 +151,23 @@ const xlayerTestnet = defineChain({
   testnet: true,
 });
 
+const linea = defineChain({
+  id: 59144,
+  name: 'Linea',
+  nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+  rpcUrls: { default: { http: ['https://rpc.linea.build'] } },
+  blockExplorers: { default: { name: 'LineaScan', url: 'https://lineascan.build' } },
+});
+
+const lineaGoerli = defineChain({
+  id: 59140,
+  name: 'Linea Goerli',
+  nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+  rpcUrls: { default: { http: ['https://rpc.goerli.linea.build'] } },
+  blockExplorers: { default: { name: 'LineaScan Goerli', url: 'https://goerli.lineascan.build' } },
+  testnet: true,
+});
+
 /**
  * Chain configuration for settlement
  */
@@ -158,6 +181,10 @@ const chainConfigs: Record<number, { chain: Chain; rpcUrl: string }> = {
   137: { chain: polygon, rpcUrl: process.env.POLYGON_RPC_URL || 'https://polygon-rpc.com' },
   1329: { chain: sei, rpcUrl: process.env.SEI_RPC_URL || 'https://evm-rpc.sei-apis.com' },
   196: { chain: xlayer, rpcUrl: process.env.XLAYER_RPC_URL || 'https://rpc.xlayer.tech' },
+  42161: { chain: arbitrum, rpcUrl: process.env.ARBITRUM_RPC_URL || 'https://arb1.arbitrum.io/rpc' },
+  10: { chain: optimism, rpcUrl: process.env.OPTIMISM_RPC_URL || 'https://mainnet.optimism.io' },
+  56: { chain: bsc, rpcUrl: process.env.BNB_RPC_URL || 'https://bsc-dataseed1.binance.org' },
+  59144: { chain: linea, rpcUrl: process.env.LINEA_RPC_URL || 'https://rpc.linea.build' },
   // Testnets
   43113: { chain: avalancheFuji, rpcUrl: process.env.AVALANCHE_FUJI_RPC_URL || 'https://api.avax-test.network/ext/bc/C/rpc' },
   84532: { chain: baseSepolia, rpcUrl: process.env.BASE_SEPOLIA_RPC_URL || 'https://sepolia.base.org' },
@@ -165,6 +192,10 @@ const chainConfigs: Record<number, { chain: Chain; rpcUrl: string }> = {
   1328: { chain: seiTestnet, rpcUrl: process.env.SEI_TESTNET_RPC_URL || 'https://evm-rpc-testnet.sei-apis.com' },
   11155111: { chain: sepolia, rpcUrl: process.env.SEPOLIA_RPC_URL || 'https://rpc.sepolia.org' },
   195: { chain: xlayerTestnet, rpcUrl: process.env.XLAYER_TESTNET_RPC_URL || 'https://testrpc.xlayer.tech' },
+  421614: { chain: arbitrumSepolia, rpcUrl: process.env.ARBITRUM_SEPOLIA_RPC_URL || 'https://sepolia-rollup.arbitrum.io/rpc' },
+  11155420: { chain: optimismSepolia, rpcUrl: process.env.OPTIMISM_SEPOLIA_RPC_URL || 'https://sepolia.optimism.io' },
+  97: { chain: bscTestnet, rpcUrl: process.env.BNB_TESTNET_RPC_URL || 'https://data-seed-prebsc-1-s1.binance.org:8545' },
+  59140: { chain: lineaGoerli, rpcUrl: process.env.LINEA_GOERLI_RPC_URL || 'https://rpc.goerli.linea.build' },
 };
 
 export interface ERC3009Authorization {
