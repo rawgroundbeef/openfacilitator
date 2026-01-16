@@ -360,17 +360,47 @@ export function ProductsSection({ facilitatorId, facilitator }: ProductsSectionP
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="imageUrl">Image URL (optional)</Label>
-                    <Input
-                      id="imageUrl"
-                      type="url"
-                      placeholder="https://example.com/product-image.jpg"
-                      value={imageUrl}
-                      onChange={(e) => setImageUrl(e.target.value)}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Product image for storefront display
-                    </p>
+                    <Label>Product Image (optional)</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="imageUrl"
+                        type="url"
+                        placeholder="https://... or upload"
+                        value={imageUrl.startsWith('data:') ? '' : imageUrl}
+                        onChange={(e) => setImageUrl(e.target.value)}
+                        className="flex-1"
+                      />
+                      <label className="inline-flex items-center justify-center px-3 py-2 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground cursor-pointer text-sm">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file && file.size < 500000) {
+                              const reader = new FileReader();
+                              reader.onloadend = () => setImageUrl(reader.result as string);
+                              reader.readAsDataURL(file);
+                            } else if (file) {
+                              alert('Image must be under 500KB');
+                            }
+                          }}
+                        />
+                        Upload
+                      </label>
+                    </div>
+                    {imageUrl && (
+                      <div className="relative w-16 h-16 rounded border overflow-hidden">
+                        <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setImageUrl('')}
+                          className="absolute top-0 right-0 bg-black/50 text-white w-4 h-4 flex items-center justify-center text-xs rounded-bl"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="groupName">Group Name (optional)</Label>
@@ -716,17 +746,47 @@ export function ProductsSection({ facilitatorId, facilitator }: ProductsSectionP
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="edit-imageUrl">Image URL (optional)</Label>
-                <Input
-                  id="edit-imageUrl"
-                  type="url"
-                  placeholder="https://example.com/product-image.jpg"
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Product image for storefront display
-                </p>
+                <Label>Product Image (optional)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="edit-imageUrl"
+                    type="url"
+                    placeholder="https://... or upload"
+                    value={imageUrl.startsWith('data:') ? '' : imageUrl}
+                    onChange={(e) => setImageUrl(e.target.value)}
+                    className="flex-1"
+                  />
+                  <label className="inline-flex items-center justify-center px-3 py-2 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground cursor-pointer text-sm">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file && file.size < 500000) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => setImageUrl(reader.result as string);
+                          reader.readAsDataURL(file);
+                        } else if (file) {
+                          alert('Image must be under 500KB');
+                        }
+                      }}
+                    />
+                    Upload
+                  </label>
+                </div>
+                {imageUrl && (
+                  <div className="relative w-16 h-16 rounded border overflow-hidden">
+                    <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setImageUrl('')}
+                      className="absolute top-0 right-0 bg-black/50 text-white w-4 h-4 flex items-center justify-center text-xs rounded-bl"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-groupName">Group Name (optional)</Label>
