@@ -266,8 +266,8 @@ export function getGlobalStats(): {
         COUNT(DISTINCT pl.id) as total_links,
         COUNT(plp.id) as total_payments,
         COALESCE(SUM(CASE WHEN plp.status = 'success' THEN CAST(plp.amount AS INTEGER) ELSE 0 END), 0) as volume_atomic
-      FROM payment_links pl
-      LEFT JOIN payment_link_payments plp ON pl.id = plp.payment_link_id
+      FROM products pl
+      LEFT JOIN product_payments plp ON pl.id = plp.product_id
     `
     )
     .get() as {
@@ -288,8 +288,8 @@ export function getGlobalStats(): {
       COUNT(t.id) as transaction_count,
       COALESCE(SUM(CAST(t.amount AS INTEGER)), 0) as volume_atomic,
       COUNT(DISTINCT t.from_address) as unique_wallets,
-      (SELECT COUNT(DISTINCT pay_to_address) FROM payment_links WHERE facilitator_id = f.id) as total_sellers,
-      (SELECT COUNT(*) FROM payment_links WHERE facilitator_id = f.id) as total_links
+      (SELECT COUNT(DISTINCT pay_to_address) FROM products WHERE facilitator_id = f.id) as total_sellers,
+      (SELECT COUNT(*) FROM products WHERE facilitator_id = f.id) as total_links
     FROM facilitators f
     LEFT JOIN transactions t ON f.id = t.facilitator_id
       AND t.type = 'settle'
