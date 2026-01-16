@@ -149,10 +149,10 @@ async function handleStatsRequest(
     // Verify payment
     const verifyResult = await facilitator.verify(paymentPayload, requirement as PaymentRequirements);
 
-    if (!verifyResult.valid) {
+    if (!verifyResult.isValid) {
       res.status(402).json({
         error: 'Payment verification failed',
-        reason: verifyResult.error || 'Unknown verification error',
+        reason: verifyResult.invalidReason || 'Unknown verification error',
         accepts: [requirement],
       });
       return;
@@ -164,10 +164,10 @@ async function handleStatsRequest(
     console.log('[Stats] Settlement result:', JSON.stringify(settleResult, null, 2));
 
     if (!settleResult.success) {
-      console.error('[Stats] Settlement FAILED:', settleResult.errorMessage);
+      console.error('[Stats] Settlement FAILED:', settleResult.errorReason);
       res.status(402).json({
         error: 'Payment settlement failed',
-        reason: settleResult.errorMessage || 'Unknown settlement error',
+        reason: settleResult.errorReason || 'Unknown settlement error',
         accepts: [requirement],
       });
       return;
@@ -178,7 +178,7 @@ async function handleStatsRequest(
 
     res.json({
       success: true,
-      paymentTxHash: settleResult.transactionHash,
+      paymentTxHash: settleResult.transaction,
       timestamp: new Date().toISOString(),
       stats,
     });

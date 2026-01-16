@@ -286,17 +286,54 @@ export async function executeERC3009Settlement(
       };
     }
 
-    // Send transaction directly without gas estimation
-    // Gas estimation can fail due to clock skew between server and blockchain
-    // The actual transaction will succeed because block timestamp moves forward
-    console.log('[ERC3009Settlement] Sending transaction...');
-    const hash = await walletClient.sendTransaction({
-      to: tokenAddress,
-      data,
-      gas: 100000n, // ERC-3009 transfers use ~65k gas, 100k is safe
-      gasPrice,
+    // Get nonce with 'pending' blockTag to include mempool transactions
+    // This prevents "replacement transaction underpriced" errors when multiple
+    // settlements are sent in quick succession
+    const nonce = await publicClient.getTransactionCount({
+      address: account.address,
+      blockTag: 'pending',
     });
-    console.log('[ERC3009Settlement] Transaction sent! Hash:', hash);
+    console.log('[ERC3009Settlement] Using nonce (pending):', nonce);
+
+    // Send transaction with explicit nonce and retry logic for underpriced errors
+    console.log('[ERC3009Settlement] Sending transaction...');
+    let hash: Hex;
+    let attempts = 0;
+    const maxAttempts = 3;
+    let currentGasPrice = gasPrice;
+
+    while (attempts < maxAttempts) {
+      try {
+        hash = await walletClient.sendTransaction({
+          to: tokenAddress,
+          data,
+          gas: 100000n, // ERC-3009 transfers use ~65k gas, 100k is safe
+          gasPrice: currentGasPrice,
+          nonce,
+        });
+        console.log('[ERC3009Settlement] Transaction sent! Hash:', hash);
+        break;
+      } catch (sendError: unknown) {
+        const errMsg = sendError instanceof Error ? sendError.message : String(sendError);
+        attempts++;
+
+        // Check if it's an underpriced error (nonce collision with pending tx)
+        if (errMsg.toLowerCase().includes('underpriced') || errMsg.toLowerCase().includes('nonce')) {
+          if (attempts < maxAttempts) {
+            // Bump gas price by 20% and retry
+            currentGasPrice = (currentGasPrice * 120n) / 100n;
+            console.warn(`[ERC3009Settlement] Retry ${attempts}/${maxAttempts}: Bumping gas price to ${currentGasPrice}`);
+            continue;
+          }
+        }
+
+        // Not an underpriced error or max attempts reached
+        throw sendError;
+      }
+    }
+
+    // TypeScript: hash is definitely assigned if we get here
+    hash = hash!;
 
     // Wait for confirmation
     console.log('[ERC3009Settlement] Waiting for confirmation...');

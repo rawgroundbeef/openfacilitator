@@ -6,15 +6,20 @@ import { requireFacilitator } from '../middleware/tenant.js';
 import { createTransaction, updateTransactionStatus } from '../db/transactions.js';
 import { getFacilitatorById } from '../db/facilitators.js';
 import {
-  getPaymentLinkById,
-  getPaymentLinkByIdOrSlug,
-  getPaymentLinkBySlug,
-  getActivePaymentLinks,
-  createPaymentLinkPayment,
-  updatePaymentLinkPaymentStatus,
-} from '../db/payment-links.js';
+  getProductById,
+  getProductByIdOrSlug,
+  getProductBySlug,
+  getActiveProducts,
+  createProductPayment,
+  updateProductPaymentStatus,
+} from '../db/products.js';
+import {
+  getStorefrontBySlug,
+  getStorefrontProducts,
+} from '../db/storefronts.js';
+import type { RequiredFieldDefinition } from '../db/types.js';
 import { decryptPrivateKey } from '../utils/crypto.js';
-import { sendSettlementWebhook, deliverWebhook, generateWebhookSecret, type PaymentLinkWebhookPayload } from '../services/webhook.js';
+import { sendSettlementWebhook, deliverWebhook, generateWebhookSecret, type ProductWebhookPayload } from '../services/webhook.js';
 import { executeAction, type ActionResult } from '../services/actions.js';
 import { getWebhookById } from '../db/webhooks.js';
 import { getProxyUrlBySlug } from '../db/proxy-urls.js';
@@ -27,18 +32,18 @@ const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET ||
   crypto.createHash('sha256').update(process.env.ENCRYPTION_KEY || 'openfacilitator-access-default').digest('hex');
 
 /**
- * Create a signed access token for a payment link
+ * Create a signed access token for a product
  */
-function createAccessToken(linkId: string, expiresAt: number): string {
-  const payload = JSON.stringify({ linkId, exp: expiresAt });
+function createAccessToken(productId: string, expiresAt: number): string {
+  const payload = JSON.stringify({ productId, exp: expiresAt });
   const signature = crypto.createHmac('sha256', ACCESS_TOKEN_SECRET).update(payload).digest('base64url');
   return Buffer.from(payload).toString('base64url') + '.' + signature;
 }
 
 /**
- * Verify an access token and return the link ID if valid
+ * Verify an access token and return the product ID if valid
  */
-function verifyAccessToken(token: string, expectedLinkId: string): boolean {
+function verifyAccessToken(token: string, expectedProductId: string): boolean {
   try {
     const [payloadB64, signature] = token.split('.');
     if (!payloadB64 || !signature) return false;
@@ -48,8 +53,10 @@ function verifyAccessToken(token: string, expectedLinkId: string): boolean {
 
     if (signature !== expectedSig) return false;
 
-    const data = JSON.parse(payload) as { linkId: string; exp: number };
-    if (data.linkId !== expectedLinkId) return false;
+    // Support both old (linkId) and new (productId) token formats
+    const data = JSON.parse(payload) as { productId?: string; linkId?: string; exp: number };
+    const tokenProductId = data.productId || data.linkId;
+    if (tokenProductId !== expectedProductId) return false;
     if (Date.now() > data.exp * 1000) return false;
 
     return true;
@@ -97,6 +104,73 @@ const verifyRequestSchema = z.object({
 
 const settleRequestSchema = verifyRequestSchema;
 
+// Schema for payment metadata header (base64 or plain JSON)
+const paymentMetadataHeaderSchema = z.string().transform((val, ctx) => {
+  // Try base64 first
+  try {
+    return JSON.parse(Buffer.from(val, 'base64').toString('utf-8')) as Record<string, unknown>;
+  } catch {
+    // Try plain JSON
+    try {
+      return JSON.parse(val) as Record<string, unknown>;
+    } catch {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Invalid X-Payment-Metadata header encoding (expected base64-encoded JSON or plain JSON)',
+      });
+      return z.NEVER;
+    }
+  }
+});
+
+/**
+ * Build a dynamic Zod schema for validating payment metadata against required fields
+ */
+function buildMetadataSchema(requiredFields: RequiredFieldDefinition[]): z.ZodObject<z.ZodRawShape> {
+  const shape: z.ZodRawShape = {};
+
+  for (const field of requiredFields) {
+    let fieldSchema: z.ZodTypeAny;
+
+    switch (field.type) {
+      case 'email':
+        fieldSchema = z.string().email(`${field.label || field.name} must be a valid email`);
+        break;
+      case 'number':
+        fieldSchema = z.coerce.number({
+          invalid_type_error: `${field.label || field.name} must be a number`,
+        });
+        break;
+      case 'select':
+        if (field.options && field.options.length > 0) {
+          fieldSchema = z.enum(field.options as [string, ...string[]], {
+            errorMap: () => ({
+              message: `${field.label || field.name} must be one of: ${field.options?.join(', ')}`,
+            }),
+          });
+        } else {
+          fieldSchema = z.string();
+        }
+        break;
+      case 'address':
+      case 'text':
+      default:
+        fieldSchema = z.string();
+        break;
+    }
+
+    // Apply required/optional
+    const isRequired = field.required !== false;
+    if (!isRequired) {
+      fieldSchema = fieldSchema.optional().or(z.literal(''));
+    }
+
+    shape[field.name] = fieldSchema;
+  }
+
+  return z.object(shape).passthrough();
+}
+
 /**
  * Normalize paymentPayload to string format
  * Accepts both base64 string and object, returns string
@@ -120,11 +194,11 @@ function isSolanaNetwork(network: string): boolean {
 }
 
 /**
- * Handle payment link webhook with action execution
+ * Handle product webhook with action execution
  * Supports both first-class webhooks (by ID) and inline webhooks (legacy)
  */
-interface PaymentLinkWebhookContext {
-  link: {
+interface ProductWebhookContext {
+  product: {
     id: string;
     name: string;
     amount: string;
@@ -147,16 +221,16 @@ interface PaymentLinkWebhookContext {
   metadata?: Record<string, string>;
 }
 
-async function deliverPaymentLinkWebhook(ctx: PaymentLinkWebhookContext): Promise<void> {
-  const { link, facilitator, payment, metadata } = ctx;
+async function deliverProductWebhook(ctx: ProductWebhookContext): Promise<void> {
+  const { product, facilitator, payment, metadata } = ctx;
 
   let webhookUrl: string | null = null;
   let webhookSecret: string | null = null;
   let actionType: string | null = null;
 
   // Check for first-class webhook (by ID)
-  if (link.webhook_id) {
-    const webhook = getWebhookById(link.webhook_id);
+  if (product.webhook_id) {
+    const webhook = getWebhookById(product.webhook_id);
     if (webhook && webhook.active === 1) {
       webhookUrl = webhook.url;
       webhookSecret = webhook.secret;
@@ -166,8 +240,8 @@ async function deliverPaymentLinkWebhook(ctx: PaymentLinkWebhookContext): Promis
 
   // Fall back to inline webhook (legacy)
   if (!webhookUrl) {
-    webhookUrl = link.webhook_url || facilitator.webhook_url;
-    webhookSecret = link.webhook_secret || facilitator.webhook_secret;
+    webhookUrl = product.webhook_url || facilitator.webhook_url;
+    webhookSecret = product.webhook_secret || facilitator.webhook_secret;
   }
 
   // No webhook configured
@@ -180,26 +254,26 @@ async function deliverPaymentLinkWebhook(ctx: PaymentLinkWebhookContext): Promis
   if (actionType) {
     actionResult = await executeAction(actionType, {
       payerAddress: payment.payerAddress,
-      paymentLinkId: link.id,
-      amount: link.amount,
-      asset: link.asset,
-      network: link.network,
+      productId: product.id,
+      amount: product.amount,
+      asset: product.asset,
+      network: product.network,
       transactionHash: payment.transactionHash,
     });
   }
 
   // Build webhook payload
-  const webhookPayload: PaymentLinkWebhookPayload & { action?: { type: string; status: string; result?: Record<string, unknown> }; metadata?: Record<string, string> } = {
-    event: 'payment_link.payment',
-    paymentLinkId: link.id,
-    paymentLinkName: link.name,
+  const webhookPayload: ProductWebhookPayload & { action?: { type: string; status: string; result?: Record<string, unknown> }; metadata?: Record<string, string> } = {
+    event: 'product.payment',
+    productId: product.id,
+    productName: product.name,
     timestamp: new Date().toISOString(),
     payment: {
       id: payment.id,
       payerAddress: payment.payerAddress,
-      amount: link.amount,
-      asset: link.asset,
-      network: link.network,
+      amount: product.amount,
+      asset: product.asset,
+      network: product.network,
       transactionHash: payment.transactionHash,
     },
     metadata,
@@ -216,7 +290,7 @@ async function deliverPaymentLinkWebhook(ctx: PaymentLinkWebhookContext): Promis
 
   // Deliver webhook (fire and forget)
   deliverWebhook(webhookUrl, webhookSecret, webhookPayload, 3).catch((err) => {
-    console.error('Payment link webhook delivery failed:', err);
+    console.error('Product webhook delivery failed:', err);
   });
 }
 
@@ -362,7 +436,7 @@ router.post('/verify', requireFacilitator, async (req: Request, res: Response) =
         to_address: record.owner_address,
         amount: paymentRequirements.maxAmountRequired,
         asset: paymentRequirements.asset,
-        status: result.valid ? 'success' : 'failed',
+        status: result.isValid ? 'success' : 'failed',
         error_message: result.invalidReason,
       });
     }
@@ -371,7 +445,7 @@ router.post('/verify', requireFacilitator, async (req: Request, res: Response) =
   } catch (error) {
     console.error('Verify error:', error);
     res.status(500).json({
-      valid: false,
+      isValid: false,
       invalidReason: 'Internal server error',
     });
   }
@@ -381,6 +455,8 @@ router.post('/verify', requireFacilitator, async (req: Request, res: Response) =
  * POST /settle - Settle a payment
  */
 router.post('/settle', requireFacilitator, async (req: Request, res: Response) => {
+  // Extract network early for error responses
+  let networkForError = '';
   try {
     const parsed = settleRequestSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -394,6 +470,7 @@ router.post('/settle', requireFacilitator, async (req: Request, res: Response) =
     // Normalize payload - accept both string and object format
     const paymentPayload = normalizePaymentPayload(parsed.data.paymentPayload);
     const { paymentRequirements } = parsed.data;
+    networkForError = paymentRequirements.network;
     const record = req.facilitator!;
 
     // Build facilitator config
@@ -425,14 +502,20 @@ router.post('/settle', requireFacilitator, async (req: Request, res: Response) =
           console.error('Failed to decrypt Solana private key:', e);
           res.status(500).json({
             success: false,
-            errorMessage: 'Failed to decrypt Solana wallet',
+            transaction: '',
+            payer: '',
+            network: paymentRequirements.network,
+            errorReason: 'Failed to decrypt Solana wallet',
           });
           return;
         }
       } else {
         res.status(400).json({
           success: false,
-          errorMessage: 'Solana wallet not configured. Please set up a Solana wallet in the dashboard.',
+          transaction: '',
+          payer: '',
+          network: paymentRequirements.network,
+          errorReason: 'Solana wallet not configured. Please set up a Solana wallet in the dashboard.',
         });
         return;
       }
@@ -445,14 +528,20 @@ router.post('/settle', requireFacilitator, async (req: Request, res: Response) =
           console.error('Failed to decrypt EVM private key:', e);
           res.status(500).json({
             success: false,
-            errorMessage: 'Failed to decrypt EVM wallet',
+            transaction: '',
+            payer: '',
+            network: paymentRequirements.network,
+            errorReason: 'Failed to decrypt EVM wallet',
           });
           return;
         }
       } else {
         res.status(400).json({
           success: false,
-          errorMessage: 'EVM wallet not configured. Please set up an EVM wallet in the dashboard.',
+          transaction: '',
+          payer: '',
+          network: paymentRequirements.network,
+          errorReason: 'EVM wallet not configured. Please set up an EVM wallet in the dashboard.',
         });
         return;
       }
@@ -481,7 +570,7 @@ router.post('/settle', requireFacilitator, async (req: Request, res: Response) =
     }
     
     // Log the settlement attempt
-    const transaction = createTransaction({
+    const txRecord = createTransaction({
       facilitator_id: record.id,
       type: 'settle',
       network: paymentRequirements.network,
@@ -490,14 +579,14 @@ router.post('/settle', requireFacilitator, async (req: Request, res: Response) =
       amount: paymentRequirements.maxAmountRequired,
       asset: paymentRequirements.asset,
       status: result.success ? 'pending' : 'failed',
-      transaction_hash: result.transactionHash,
-      error_message: result.errorMessage,
+      transaction_hash: result.transaction,
+      error_message: result.errorReason,
     });
 
-    if (result.success && transaction) {
+    if (result.success && txRecord) {
       // Update to success after transaction is confirmed
       // TODO: Implement transaction confirmation monitoring
-      updateTransactionStatus(transaction.id, 'success');
+      updateTransactionStatus(txRecord.id, 'success');
 
       // Send webhook notification (fire and forget)
       if (record.webhook_url && record.webhook_secret) {
@@ -506,13 +595,13 @@ router.post('/settle', requireFacilitator, async (req: Request, res: Response) =
           record.webhook_secret,
           record.id,
           {
-            id: transaction.id,
+            id: txRecord.id,
             fromAddress: fromAddress,
             toAddress: record.owner_address,
             amount: paymentRequirements.maxAmountRequired,
             asset: paymentRequirements.asset,
             network: paymentRequirements.network,
-            transactionHash: result.transactionHash || null,
+            transactionHash: result.transaction || null,
           }
         );
       }
@@ -523,18 +612,21 @@ router.post('/settle', requireFacilitator, async (req: Request, res: Response) =
     console.error('Settle error:', error);
     res.status(500).json({
       success: false,
-      errorMessage: 'Internal server error',
+      transaction: '',
+      payer: '',
+      network: networkForError,
+      errorReason: 'Internal server error',
     });
   }
 });
 
-// ============= PAYMENT LINKS PUBLIC ROUTES =============
+// ============= PRODUCTS PUBLIC ROUTES =============
 // Note: These routes do NOT use requireFacilitator middleware
 // because they need to work on localhost (no subdomain).
-// Instead, we look up the facilitator from the payment link.
+// Instead, we look up the facilitator from the product.
 
 /**
- * GET /pay/:linkId - Serve the payment page (HTML) or handle x402 protocol (JSON)
+ * GET /pay/:productId - Serve the payment page (HTML) or handle x402 protocol (JSON)
  *
  * Content negotiation:
  * - Accept: text/html (or browser) → renders payment UI
@@ -544,12 +636,12 @@ router.post('/settle', requireFacilitator, async (req: Request, res: Response) =
  * - No X-Payment header → 402 with payment requirements
  * - With X-Payment header → verify, settle, record payment, return success
  */
-router.get('/pay/:linkId', async (req: Request, res: Response) => {
-  // Try to get link by ID first, then by slug if we have facilitator context
+router.get('/pay/:productId', async (req: Request, res: Response) => {
+  // Try to get product by ID first, then by slug if we have facilitator context
   const facilitatorId = req.facilitator?.id;
-  let link = getPaymentLinkById(req.params.linkId);
-  if (!link && facilitatorId) {
-    link = getPaymentLinkBySlug(facilitatorId, req.params.linkId);
+  let product = getProductById(req.params.productId);
+  if (!product && facilitatorId) {
+    product = getProductBySlug(facilitatorId, req.params.productId);
   }
 
   const acceptHeader = req.get('Accept') || '';
@@ -557,23 +649,23 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
   const wantsJson = acceptHeader.includes('application/json') || paymentHeader;
 
   // Handle not found
-  if (!link) {
+  if (!product) {
     if (wantsJson) {
-      res.status(404).json({ error: 'Payment link not found' });
+      res.status(404).json({ error: 'Product not found' });
     } else {
       res.status(404).send(`
         <!DOCTYPE html>
         <html><head><title>Not Found</title></head>
         <body style="font-family: system-ui; text-align: center; padding: 50px;">
-          <h1>Payment Link Not Found</h1>
-          <p>This payment link doesn't exist or has been deleted.</p>
+          <h1>Product Not Found</h1>
+          <p>This product doesn't exist or has been deleted.</p>
         </body></html>
       `);
     }
     return;
   }
 
-  const record = getFacilitatorById(link.facilitator_id);
+  const record = getFacilitatorById(product.facilitator_id);
 
   if (!record) {
     if (wantsJson) {
@@ -584,23 +676,23 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
         <html><head><title>Not Found</title></head>
         <body style="font-family: system-ui; text-align: center; padding: 50px;">
           <h1>Facilitator Not Found</h1>
-          <p>The facilitator for this payment link no longer exists.</p>
+          <p>The facilitator for this product no longer exists.</p>
         </body></html>
       `);
     }
     return;
   }
 
-  if (!link.active) {
+  if (!product.active) {
     if (wantsJson) {
-      res.status(410).json({ error: 'Payment link is inactive' });
+      res.status(410).json({ error: 'Product is inactive' });
     } else {
       res.status(410).send(`
         <!DOCTYPE html>
         <html><head><title>Inactive</title></head>
         <body style="font-family: system-ui; text-align: center; padding: 50px;">
-          <h1>Payment Link Inactive</h1>
-          <p>This payment link is no longer active.</p>
+          <h1>Product Inactive</h1>
+          <p>This product is no longer active.</p>
         </body></html>
       `);
     }
@@ -609,8 +701,8 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
 
   // === Check for valid access cookie (if access_ttl is set) ===
   const cookies = parseCookies(req.get('Cookie'));
-  const accessToken = cookies[`x402_access_${link.id}`];
-  const hasValidAccess = accessToken && link.access_ttl > 0 && verifyAccessToken(accessToken, link.id);
+  const accessToken = cookies[`x402_access_${product.id}`];
+  const hasValidAccess = accessToken && product.access_ttl > 0 && verifyAccessToken(accessToken, product.id);
 
   // === x402 Protocol Handler ===
   if (wantsJson) {
@@ -620,24 +712,24 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
       : `https://${record.subdomain}.openfacilitator.io`;
 
     // Check if this is a Solana network
-    const isSolanaNetwork = link.network === 'solana' ||
-                            link.network === 'solana-mainnet' ||
-                            link.network === 'solana-devnet' ||
-                            link.network.startsWith('solana:');
+    const isSolanaNet = product.network === 'solana' ||
+                        product.network === 'solana-mainnet' ||
+                        product.network === 'solana-devnet' ||
+                        product.network.startsWith('solana:');
 
     // Build payment requirements
     const paymentRequirements: Record<string, unknown> = {
       scheme: 'exact',
-      network: link.network,
-      maxAmountRequired: link.amount,
-      asset: link.asset,
-      payTo: link.pay_to_address,
-      description: link.description || link.name,
-      resource: `https://${record.custom_domain || record.subdomain + '.openfacilitator.io'}/pay/${link.id}`,
+      network: product.network,
+      maxAmountRequired: product.amount,
+      asset: product.asset,
+      payTo: product.pay_to_address,
+      description: product.description || product.name,
+      resource: `https://${record.custom_domain || record.subdomain + '.openfacilitator.io'}/pay/${product.id}`,
     };
 
     // For Solana, add fee payer
-    if (isSolanaNetwork && record.encrypted_solana_private_key) {
+    if (isSolanaNet && record.encrypted_solana_private_key) {
       try {
         const solanaPrivateKey = decryptPrivateKey(record.encrypted_solana_private_key);
         const solanaFeePayer = getSolanaPublicKey(solanaPrivateKey);
@@ -647,7 +739,7 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
         res.status(500).json({ error: 'Solana wallet not configured properly' });
         return;
       }
-    } else if (isSolanaNetwork) {
+    } else if (isSolanaNet) {
       res.status(500).json({ error: 'Solana wallet not configured for this facilitator' });
       return;
     }
@@ -657,8 +749,8 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
       // If user has valid access from a previous payment, serve content directly
       if (hasValidAccess) {
         // For proxy type: forward to target
-        if (link.link_type === 'proxy' && link.success_redirect_url) {
-          const headersForward = JSON.parse(link.headers_forward || '[]') as string[];
+        if (product.link_type === 'proxy' && product.success_redirect_url) {
+          const headersForward = JSON.parse(product.headers_forward || '[]') as string[];
           const forwardHeaders: Record<string, string> = {
             'Content-Type': req.get('Content-Type') || 'application/json',
           };
@@ -667,8 +759,8 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
             if (value) forwardHeaders[header] = value;
           }
           try {
-            const targetResponse = await fetch(link.success_redirect_url, {
-              method: link.method || 'GET',
+            const targetResponse = await fetch(product.success_redirect_url, {
+              method: product.method || 'GET',
               headers: forwardHeaders,
             });
             const targetContentType = targetResponse.headers.get('Content-Type') || 'application/json';
@@ -684,8 +776,8 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
           }
         }
         // For redirect type: return the redirect URL
-        if (link.link_type === 'redirect' && link.success_redirect_url) {
-          res.json({ success: true, redirectUrl: link.success_redirect_url, accessGranted: 'cookie' });
+        if (product.link_type === 'redirect' && product.success_redirect_url) {
+          res.json({ success: true, redirectUrl: product.success_redirect_url, accessGranted: 'cookie' });
           return;
         }
         // For payment type with valid access: just confirm access
@@ -693,17 +785,61 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
         return;
       }
 
+      // Parse required fields for the response
+      const productRequiredFields: RequiredFieldDefinition[] = JSON.parse(product.required_fields || '[]');
+
       res.status(402).json({
         x402Version: 1,
         accepts: [paymentRequirements],
         error: 'Payment Required',
-        message: link.description || link.name,
+        message: product.description || product.name,
+        requiredFields: productRequiredFields.length > 0 ? productRequiredFields : undefined,
       });
       return;
     }
 
     // Payment provided - verify and settle
     try {
+      // Parse required fields for validation
+      const productRequiredFields: RequiredFieldDefinition[] = JSON.parse(product.required_fields || '[]');
+
+      // Parse and validate payment metadata from header
+      let paymentMetadata: Record<string, unknown> = {};
+      const metadataHeader = req.get('X-Payment-Metadata');
+
+      if (metadataHeader) {
+        const headerParsed = paymentMetadataHeaderSchema.safeParse(metadataHeader);
+        if (!headerParsed.success) {
+          res.status(400).json({
+            error: 'Invalid X-Payment-Metadata header',
+            details: headerParsed.error.issues,
+          });
+          return;
+        }
+        paymentMetadata = headerParsed.data;
+      }
+
+      // Validate required fields using dynamic Zod schema
+      if (productRequiredFields.length > 0) {
+        const metadataSchema = buildMetadataSchema(productRequiredFields);
+        const validationResult = metadataSchema.safeParse(paymentMetadata);
+
+        if (!validationResult.success) {
+          res.status(400).json({
+            error: 'Invalid or missing required fields',
+            details: validationResult.error.issues.map(issue => ({
+              field: issue.path.join('.'),
+              message: issue.message,
+            })),
+            requiredFields: productRequiredFields,
+            hint: 'Include required fields in X-Payment-Metadata header (base64-encoded JSON or plain JSON)',
+          });
+          return;
+        }
+        // Use validated data
+        paymentMetadata = validationResult.data;
+      }
+
       // Decode payment payload
       let paymentPayload: unknown;
       try {
@@ -753,49 +889,50 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
 
       const settleResult = (await settleResponse.json()) as {
         success?: boolean;
-        transactionHash?: string;
-        errorMessage?: string;
+        transaction?: string;
+        errorReason?: string;
         payer?: string;
       };
 
       if (!settleResult.success) {
         res.status(402).json({
           error: 'Payment settlement failed',
-          reason: settleResult.errorMessage,
+          reason: settleResult.errorReason,
           accepts: [paymentRequirements],
         });
         return;
       }
 
-      // Record the payment
+      // Record the payment with metadata
       const payerAddress = settleResult.payer || verifyResult.payer || 'unknown';
-      const payment = createPaymentLinkPayment({
-        payment_link_id: link.id,
+      const payment = createProductPayment({
+        product_id: product.id,
         payer_address: payerAddress,
-        amount: link.amount,
-        transaction_hash: settleResult.transactionHash,
+        amount: product.amount,
+        transaction_hash: settleResult.transaction,
         status: 'success',
+        metadata: paymentMetadata,
       });
 
       // Set access cookie if access_ttl is configured
-      if (link.access_ttl > 0) {
-        const expiresAt = Math.floor(Date.now() / 1000) + link.access_ttl;
-        const token = createAccessToken(link.id, expiresAt);
-        res.setHeader('Set-Cookie', `x402_access_${link.id}=${token}; Path=/; Max-Age=${link.access_ttl}; HttpOnly; SameSite=Lax${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`);
+      if (product.access_ttl > 0) {
+        const expiresAt = Math.floor(Date.now() / 1000) + product.access_ttl;
+        const token = createAccessToken(product.id, expiresAt);
+        res.setHeader('Set-Cookie', `x402_access_${product.id}=${token}; Path=/; Max-Age=${product.access_ttl}; HttpOnly; SameSite=Lax${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`);
       }
 
       // Fire webhook and execute actions if configured
-      if (settleResult.transactionHash) {
-        deliverPaymentLinkWebhook({
-          link: {
-            id: link.id,
-            name: link.name,
-            amount: link.amount,
-            asset: link.asset,
-            network: link.network,
-            webhook_id: link.webhook_id,
-            webhook_url: link.webhook_url,
-            webhook_secret: link.webhook_secret,
+      if (settleResult.transaction) {
+        deliverProductWebhook({
+          product: {
+            id: product.id,
+            name: product.name,
+            amount: product.amount,
+            asset: product.asset,
+            network: product.network,
+            webhook_id: product.webhook_id,
+            webhook_url: product.webhook_url,
+            webhook_secret: product.webhook_secret,
           },
           facilitator: {
             id: record.id,
@@ -805,15 +942,15 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
           payment: {
             id: payment.id,
             payerAddress,
-            transactionHash: settleResult.transactionHash,
+            transactionHash: settleResult.transaction,
           },
         });
       }
 
-      // Handle response based on link type
-      if (link.link_type === 'proxy' && link.success_redirect_url) {
+      // Handle response based on product type
+      if (product.link_type === 'proxy' && product.success_redirect_url) {
         // For proxy type: forward request to target URL and return response
-        const headersForward = JSON.parse(link.headers_forward || '[]') as string[];
+        const headersForward = JSON.parse(product.headers_forward || '[]') as string[];
         const forwardHeaders: Record<string, string> = {
           'Content-Type': req.get('Content-Type') || 'application/json',
         };
@@ -826,17 +963,17 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
         }
 
         try {
-          const targetResponse = await fetch(link.success_redirect_url, {
-            method: link.method || 'GET',
+          const targetResponse = await fetch(product.success_redirect_url, {
+            method: product.method || 'GET',
             headers: forwardHeaders,
-            body: ['GET', 'HEAD'].includes(link.method || 'GET') ? undefined : JSON.stringify(req.body),
+            body: ['GET', 'HEAD'].includes(product.method || 'GET') ? undefined : JSON.stringify(req.body),
           });
 
           const targetContentType = targetResponse.headers.get('Content-Type') || 'application/json';
           const targetBody = await targetResponse.text();
 
           res.setHeader('Content-Type', targetContentType);
-          res.setHeader('X-Payment-TxHash', settleResult.transactionHash || '');
+          res.setHeader('X-Payment-TxHash', settleResult.transaction || '');
           res.status(targetResponse.status).send(targetBody);
           return;
         } catch (proxyError) {
@@ -844,7 +981,7 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
           res.status(502).json({
             error: 'Proxy error',
             message: 'Payment succeeded but failed to forward to target',
-            transactionHash: settleResult.transactionHash,
+            transactionHash: settleResult.transaction,
           });
           return;
         }
@@ -853,14 +990,14 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
       // Return success with payment details (for payment and redirect types)
       const response: Record<string, unknown> = {
         success: true,
-        transactionHash: settleResult.transactionHash,
+        transactionHash: settleResult.transaction,
         paymentId: payment.id,
         message: 'Payment successful',
       };
 
       // Include redirect URL for redirect type
-      if (link.link_type === 'redirect' && link.success_redirect_url) {
-        response.redirectUrl = link.success_redirect_url;
+      if (product.link_type === 'redirect' && product.success_redirect_url) {
+        response.redirectUrl = product.success_redirect_url;
       }
 
       res.json(response);
@@ -877,13 +1014,13 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
   }
 
   // === Check for valid access cookie (browser flow) ===
-  console.log('[Browser Flow] Checking access:', { linkId: link.id, linkType: link.link_type, accessTtl: link.access_ttl, hasValidAccess, cookieName: `x402_access_${link.id}`, hasCookie: !!accessToken });
+  console.log('[Browser Flow] Checking access:', { productId: product.id, linkType: product.link_type, accessTtl: product.access_ttl, hasValidAccess, cookieName: `x402_access_${product.id}`, hasCookie: !!accessToken });
   if (hasValidAccess) {
-    console.log('[Browser Flow] Valid access cookie found, handling link type:', link.link_type);
+    console.log('[Browser Flow] Valid access cookie found, handling product type:', product.link_type);
     // For proxy type: fetch and return the content directly
-    if (link.link_type === 'proxy' && link.success_redirect_url) {
+    if (product.link_type === 'proxy' && product.success_redirect_url) {
       try {
-        const targetResponse = await fetch(link.success_redirect_url, {
+        const targetResponse = await fetch(product.success_redirect_url, {
           method: 'GET',
           headers: { 'Accept': '*/*' },
         });
@@ -898,12 +1035,12 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
       }
     }
     // For redirect type: redirect to success URL
-    if (link.link_type === 'redirect' && link.success_redirect_url) {
-      res.redirect(link.success_redirect_url);
+    if (product.link_type === 'redirect' && product.success_redirect_url) {
+      res.redirect(product.success_redirect_url);
       return;
     }
     // For payment type: show simple "already paid" page
-    if (link.link_type === 'payment') {
+    if (product.link_type === 'payment') {
       res.send(`
         <!DOCTYPE html>
         <html><head><title>Access Granted</title>
@@ -924,7 +1061,7 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
   );
 
   // Format amount for display
-  const amountNum = parseFloat(link.amount) / 1e6;
+  const amountNum = parseFloat(product.amount) / 1e6;
   const formattedAmount = amountNum.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   // Generate the payment page HTML (Stripe-like two-column layout)
@@ -1235,7 +1372,7 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
       </div>
 
     <div class="payment-header">Pay ${record.name}</div>
-    <div class="payment-title">${link.name}</div>
+    <div class="payment-title">${product.name}</div>
     <div class="payment-amount">$${formattedAmount} <span>USDC</span></div>
 
     <div class="order-summary">
@@ -1244,8 +1381,8 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
           <img src="/favicon.ico" alt="" onerror="this.parentElement.innerHTML='<svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\'><rect width=\\'24\\' height=\\'24\\' rx=\\'4\\' fill=\\'#635bff\\'/><path d=\\'M12 6L16 9V15L12 18L8 15V9L12 6Z\\' stroke=\\'white\\' stroke-width=\\'1.5\\' fill=\\'none\\'/></svg>'">
         </div>
         <div class="order-details">
-          <div class="order-name">${link.name}</div>
-          <div class="order-desc">${link.description || 'One-time payment'}</div>
+          <div class="order-name">${product.name}</div>
+          <div class="order-desc">${product.description || 'One-time payment'}</div>
         </div>
         <div class="order-price">$${formattedAmount}</div>
       </div>
@@ -1257,7 +1394,7 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
 
     <div class="network-badge">
       <span class="network-dot"></span>
-      ${link.network.charAt(0).toUpperCase() + link.network.slice(1)} Network
+      ${product.network.charAt(0).toUpperCase() + product.network.slice(1)} Network
     </div>
 
     <div class="spacer"></div>
@@ -1299,23 +1436,23 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
 
       <p class="info-text">
         You'll be asked to connect your wallet and sign a payment authorization.
-        The payment will be processed on the ${link.network.charAt(0).toUpperCase() + link.network.slice(1)} network using USDC.
+        The payment will be processed on the ${product.network.charAt(0).toUpperCase() + product.network.slice(1)} network using USDC.
       </p>
     </div>
   </div>
 
   <script>
-    const LINK_ID = '${link.id}';
-    const AMOUNT = '${link.amount}';
-    const ASSET = '${link.asset}';
-    const NETWORK = '${link.network}';
-    const LINK_TYPE = '${link.link_type}';
-    const ACCESS_TTL = ${link.access_ttl || 0};
-    const SUCCESS_REDIRECT = ${link.success_redirect_url ? `'${link.success_redirect_url}'` : 'null'};
+    const PRODUCT_ID = '${product.id}';
+    const AMOUNT = '${product.amount}';
+    const ASSET = '${product.asset}';
+    const NETWORK = '${product.network}';
+    const PRODUCT_TYPE = '${product.link_type}';
+    const ACCESS_TTL = ${product.access_ttl || 0};
+    const SUCCESS_REDIRECT = ${product.success_redirect_url ? `'${product.success_redirect_url}'` : 'null'};
     const IS_SOLANA = NETWORK === 'solana' || NETWORK === 'solana-devnet' || NETWORK.startsWith('solana:');
 
     // Debug logging
-    console.log('[PaymentPage] LINK_TYPE:', LINK_TYPE, 'ACCESS_TTL:', ACCESS_TTL, 'SUCCESS_REDIRECT:', SUCCESS_REDIRECT);
+    console.log('[PaymentPage] PRODUCT_TYPE:', PRODUCT_TYPE, 'ACCESS_TTL:', ACCESS_TTL, 'SUCCESS_REDIRECT:', SUCCESS_REDIRECT);
 
     // Capture URL params for metadata (e.g., pendingId for facilitator creation)
     const urlParams = new URLSearchParams(window.location.search);
@@ -1383,7 +1520,7 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
         setLoading(true, 'Preparing payment...');
 
         // Get payment requirements
-        const reqRes = await fetch('/pay/' + LINK_ID + '/requirements');
+        const reqRes = await fetch('/pay/' + PRODUCT_ID + '/requirements');
         if (!reqRes.ok) throw new Error('Failed to get payment requirements');
         const { paymentRequirements, facilitatorUrl, solanaRpcUrl } = await reqRes.json();
 
@@ -1492,13 +1629,13 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
 
         if (settleResult.success) {
           // Record the payment (include credentials so cookie is stored)
-          const completeRes = await fetch('/pay/' + LINK_ID + '/complete', {
+          const completeRes = await fetch('/pay/' + PRODUCT_ID + '/complete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'same-origin',
             body: JSON.stringify({
               payerAddress: userPublicKey,
-              transactionHash: settleResult.transactionHash,
+              transactionHash: settleResult.transaction,
               metadata: Object.keys(METADATA).length > 0 ? METADATA : undefined
             })
           });
@@ -1507,17 +1644,17 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
           showStatus('Payment successful!', 'success');
 
           // For proxy links with access_ttl, reload to show the proxied content
-          if (LINK_TYPE === 'proxy' && ACCESS_TTL > 0) {
+          if (PRODUCT_TYPE === 'proxy' && ACCESS_TTL > 0) {
             console.log('Proxy link with access_ttl, reloading in 1.5s...');
             showStatus('Payment successful! Loading content...', 'success');
             setTimeout(() => { window.location.reload(); }, 1500);
-          } else if (LINK_TYPE === 'redirect' && SUCCESS_REDIRECT) {
+          } else if (PRODUCT_TYPE === 'redirect' && SUCCESS_REDIRECT) {
             setTimeout(() => { window.location.href = SUCCESS_REDIRECT; }, 2000);
           } else if (SUCCESS_REDIRECT) {
             setTimeout(() => { window.location.href = SUCCESS_REDIRECT; }, 2000);
           }
         } else {
-          throw new Error(settleResult.errorMessage || 'Payment failed');
+          throw new Error(settleResult.errorReason || 'Payment failed');
         }
       } catch (err) {
         console.error('Payment error:', err);
@@ -1661,7 +1798,7 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
         setLoading(true, 'Preparing payment...');
 
         // Get payment requirements
-        const reqRes = await fetch('/pay/' + LINK_ID + '/requirements');
+        const reqRes = await fetch('/pay/' + PRODUCT_ID + '/requirements');
         if (!reqRes.ok) throw new Error('Failed to get payment requirements');
         const { paymentRequirements } = await reqRes.json();
 
@@ -1705,7 +1842,7 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
         }
 
         // Record the payment (include credentials so cookie is stored)
-        const completeRes = await fetch('/pay/' + LINK_ID + '/complete', {
+        const completeRes = await fetch('/pay/' + PRODUCT_ID + '/complete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
@@ -1720,11 +1857,11 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
         showStatus('Payment successful!', 'success');
 
         // For proxy links with access_ttl, reload to show the proxied content
-        if (LINK_TYPE === 'proxy' && ACCESS_TTL > 0) {
+        if (PRODUCT_TYPE === 'proxy' && ACCESS_TTL > 0) {
           console.log('Proxy link with access_ttl, reloading in 1.5s...');
           showStatus('Payment successful! Loading content...', 'success');
           setTimeout(() => { window.location.reload(); }, 1500);
-        } else if (LINK_TYPE === 'redirect' && SUCCESS_REDIRECT) {
+        } else if (PRODUCT_TYPE === 'redirect' && SUCCESS_REDIRECT) {
           setTimeout(() => { window.location.href = SUCCESS_REDIRECT; }, 2000);
         } else if (SUCCESS_REDIRECT) {
           setTimeout(() => { window.location.href = SUCCESS_REDIRECT; }, 2000);
@@ -1755,30 +1892,30 @@ router.get('/pay/:linkId', async (req: Request, res: Response) => {
 });
 
 /**
- * GET /pay/:linkId/requirements - Get payment requirements for a payment link
+ * GET /pay/:productId/requirements - Get payment requirements for a product
  */
-router.get('/pay/:linkId/requirements', async (req: Request, res: Response) => {
-  // Try to get link by ID first, then by slug if we have facilitator context
+router.get('/pay/:productId/requirements', async (req: Request, res: Response) => {
+  // Try to get product by ID first, then by slug if we have facilitator context
   const facilitatorId = req.facilitator?.id;
-  let link = getPaymentLinkById(req.params.linkId);
-  if (!link && facilitatorId) {
-    link = getPaymentLinkBySlug(facilitatorId, req.params.linkId);
+  let product = getProductById(req.params.productId);
+  if (!product && facilitatorId) {
+    product = getProductBySlug(facilitatorId, req.params.productId);
   }
 
-  if (!link) {
-    res.status(404).json({ error: 'Payment link not found' });
+  if (!product) {
+    res.status(404).json({ error: 'Product not found' });
     return;
   }
 
-  const record = getFacilitatorById(link.facilitator_id);
+  const record = getFacilitatorById(product.facilitator_id);
 
   if (!record) {
     res.status(404).json({ error: 'Facilitator not found' });
     return;
   }
 
-  if (!link.active) {
-    res.status(410).json({ error: 'Payment link is inactive' });
+  if (!product.active) {
+    res.status(410).json({ error: 'Product is inactive' });
     return;
   }
 
@@ -1788,32 +1925,32 @@ router.get('/pay/:linkId/requirements', async (req: Request, res: Response) => {
     : `https://${record.subdomain}.openfacilitator.io`;
 
   // Check if this is a Solana network
-  const isSolanaNetwork = link.network === 'solana' ||
-                          link.network === 'solana-mainnet' ||
-                          link.network === 'solana-devnet' ||
-                          link.network.startsWith('solana:');
+  const isSolanaNet = product.network === 'solana' ||
+                      product.network === 'solana-mainnet' ||
+                      product.network === 'solana-devnet' ||
+                      product.network.startsWith('solana:');
 
-  // Build payment requirements - payments go to link's pay_to_address (not facilitator wallet)
+  // Build payment requirements - payments go to product's pay_to_address (not facilitator wallet)
   const paymentRequirements: Record<string, unknown> = {
     scheme: 'exact',
-    network: link.network,
-    maxAmountRequired: link.amount,
-    asset: link.asset,
-    payTo: link.pay_to_address, // Payments go to user-specified address
-    description: link.description || link.name,
+    network: product.network,
+    maxAmountRequired: product.amount,
+    asset: product.asset,
+    payTo: product.pay_to_address, // Payments go to user-specified address
+    description: product.description || product.name,
   };
 
   // For Solana, we also need the fee payer (facilitator's Solana wallet pays gas)
   let solanaRpcUrl: string | undefined;
-  if (isSolanaNetwork && record.encrypted_solana_private_key) {
+  if (isSolanaNet && record.encrypted_solana_private_key) {
     try {
       const solanaPrivateKey = decryptPrivateKey(record.encrypted_solana_private_key);
       const solanaFeePayer = getSolanaPublicKey(solanaPrivateKey);
-      // Fee payer is the facilitator wallet (pays gas), but payTo is the link's address (receives funds)
+      // Fee payer is the facilitator wallet (pays gas), but payTo is the product's address (receives funds)
       paymentRequirements.extra = { feePayer: solanaFeePayer };
 
       // Provide RPC URL for frontend
-      solanaRpcUrl = link.network === 'solana-devnet'
+      solanaRpcUrl = product.network === 'solana-devnet'
         ? (process.env.SOLANA_DEVNET_RPC_URL || 'https://api.devnet.solana.com')
         : (process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com');
     } catch (e) {
@@ -1821,7 +1958,7 @@ router.get('/pay/:linkId/requirements', async (req: Request, res: Response) => {
       res.status(500).json({ error: 'Solana wallet not configured properly' });
       return;
     }
-  } else if (isSolanaNetwork) {
+  } else if (isSolanaNet) {
     res.status(500).json({ error: 'Solana wallet not configured for this facilitator' });
     return;
   }
@@ -1834,22 +1971,22 @@ router.get('/pay/:linkId/requirements', async (req: Request, res: Response) => {
 });
 
 /**
- * POST /pay/:linkId/complete - Record a completed payment
+ * POST /pay/:productId/complete - Record a completed payment
  */
-router.post('/pay/:linkId/complete', async (req: Request, res: Response) => {
-  // Try to get link by ID first, then by slug if we have facilitator context
+router.post('/pay/:productId/complete', async (req: Request, res: Response) => {
+  // Try to get product by ID first, then by slug if we have facilitator context
   const facilitatorId = req.facilitator?.id;
-  let link = getPaymentLinkById(req.params.linkId);
-  if (!link && facilitatorId) {
-    link = getPaymentLinkBySlug(facilitatorId, req.params.linkId);
+  let product = getProductById(req.params.productId);
+  if (!product && facilitatorId) {
+    product = getProductBySlug(facilitatorId, req.params.productId);
   }
 
-  if (!link) {
-    res.status(404).json({ error: 'Payment link not found' });
+  if (!product) {
+    res.status(404).json({ error: 'Product not found' });
     return;
   }
 
-  const record = getFacilitatorById(link.facilitator_id);
+  const record = getFacilitatorById(product.facilitator_id);
 
   if (!record) {
     res.status(404).json({ error: 'Facilitator not found' });
@@ -1863,38 +2000,39 @@ router.post('/pay/:linkId/complete', async (req: Request, res: Response) => {
     return;
   }
 
-  // Create payment record
-  const payment = createPaymentLinkPayment({
-    payment_link_id: link.id,
+  // Create payment record with metadata
+  const payment = createProductPayment({
+    product_id: product.id,
     payer_address: payerAddress,
-    amount: link.amount,
+    amount: product.amount,
     transaction_hash: transactionHash,
     status: transactionHash ? 'success' : 'failed',
     error_message: errorMessage,
+    metadata: metadata as Record<string, unknown> | undefined,
   });
 
   // Set access cookie if access_ttl is configured and payment was successful
-  console.log('[Complete] Checking cookie:', { linkId: link.id, hasTransactionHash: !!transactionHash, accessTtl: link.access_ttl });
-  if (transactionHash && link.access_ttl > 0) {
-    const expiresAt = Math.floor(Date.now() / 1000) + link.access_ttl;
-    const token = createAccessToken(link.id, expiresAt);
-    const cookieValue = `x402_access_${link.id}=${token}; Path=/; Max-Age=${link.access_ttl}; HttpOnly; SameSite=Lax${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`;
-    console.log('[Complete] Setting cookie:', { cookieName: `x402_access_${link.id}`, maxAge: link.access_ttl, expiresAt });
+  console.log('[Complete] Checking cookie:', { productId: product.id, hasTransactionHash: !!transactionHash, accessTtl: product.access_ttl });
+  if (transactionHash && product.access_ttl > 0) {
+    const expiresAt = Math.floor(Date.now() / 1000) + product.access_ttl;
+    const token = createAccessToken(product.id, expiresAt);
+    const cookieValue = `x402_access_${product.id}=${token}; Path=/; Max-Age=${product.access_ttl}; HttpOnly; SameSite=Lax${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`;
+    console.log('[Complete] Setting cookie:', { cookieName: `x402_access_${product.id}`, maxAge: product.access_ttl, expiresAt });
     res.setHeader('Set-Cookie', cookieValue);
   }
 
   // Fire webhook and execute actions if configured
   if (transactionHash) {
-    deliverPaymentLinkWebhook({
-      link: {
-        id: link.id,
-        name: link.name,
-        amount: link.amount,
-        asset: link.asset,
-        network: link.network,
-        webhook_id: link.webhook_id,
-        webhook_url: link.webhook_url,
-        webhook_secret: link.webhook_secret,
+    deliverProductWebhook({
+      product: {
+        id: product.id,
+        name: product.name,
+        amount: product.amount,
+        asset: product.asset,
+        network: product.network,
+        webhook_id: product.webhook_id,
+        webhook_url: product.webhook_url,
+        webhook_secret: product.webhook_secret,
       },
       facilitator: {
         id: record.id,
@@ -2509,7 +2647,7 @@ function generateProxyUrlPaymentPage(
             window.location.href = TARGET_URL;
           }, 1500);
         } else {
-          throw new Error(settleResult.errorMessage || 'Settlement failed');
+          throw new Error(settleResult.errorReason || 'Settlement failed');
         }
       } catch (error) {
         console.error('Payment error:', error);
@@ -2602,7 +2740,7 @@ function generateProxyUrlPaymentPage(
             window.location.href = TARGET_URL;
           }, 1500);
         } else {
-          throw new Error(settleResult.errorMessage || 'Settlement failed');
+          throw new Error(settleResult.errorReason || 'Settlement failed');
         }
       } catch (error) {
         console.error('Payment error:', error);
@@ -2787,21 +2925,21 @@ router.all('/u/:slug', async (req: Request, res: Response) => {
 
     const settleResult = (await settleResponse.json()) as {
       success?: boolean;
-      transactionHash?: string;
-      errorMessage?: string;
+      transaction?: string;
+      errorReason?: string;
       payer?: string;
     };
 
     if (!settleResult.success) {
       res.status(402).json({
         error: 'Payment settlement failed',
-        reason: settleResult.errorMessage,
+        reason: settleResult.errorReason,
         accepts: [paymentRequirements],
       });
       return;
     }
 
-    console.log(`[Proxy URL] Payment settled for ${proxyUrl.slug}: ${settleResult.transactionHash}`);
+    console.log(`[Proxy URL] Payment settled for ${proxyUrl.slug}: ${settleResult.transaction}`);
 
     // === Payment successful - forward request to target URL ===
     const headersForward = JSON.parse(proxyUrl.headers_forward) as string[];
@@ -2826,7 +2964,7 @@ router.all('/u/:slug', async (req: Request, res: Response) => {
     const targetBody = await targetResponse.text();
 
     res.setHeader('Content-Type', targetContentType);
-    res.setHeader('X-Payment-TxHash', settleResult.transactionHash || '');
+    res.setHeader('X-Payment-TxHash', settleResult.transaction || '');
 
     res.status(targetResponse.status).send(targetBody);
 
@@ -2840,6 +2978,155 @@ router.all('/u/:slug', async (req: Request, res: Response) => {
 });
 
 /**
+ * Storefront by slug - Public endpoint for a specific storefront
+ * Dual-interface: JSON for agents (Accept: application/json), HTML for browsers
+ */
+router.get('/store/:slug', requireFacilitator, (req: Request, res: Response) => {
+  const facilitator = req.facilitator;
+  if (!facilitator) {
+    res.status(404).json({ error: 'Facilitator not found' });
+    return;
+  }
+
+  const storefront = getStorefrontBySlug(facilitator.id, req.params.slug);
+  if (!storefront || storefront.active !== 1) {
+    res.status(404).json({ error: 'Storefront not found' });
+    return;
+  }
+
+  const products = getStorefrontProducts(storefront.id);
+
+  // Build base URL for products
+  const baseUrl = process.env.NODE_ENV === 'development'
+    ? `http://localhost:5002`
+    : facilitator.custom_domain
+      ? `https://${facilitator.custom_domain}`
+      : `https://${facilitator.subdomain}.openfacilitator.io`;
+
+  // Check if client wants JSON (agent/API request)
+  const acceptHeader = req.headers.accept || '';
+  const wantsJson = acceptHeader.includes('application/json');
+
+  if (wantsJson) {
+    // Return JSON for agents
+    res.json({
+      id: storefront.id,
+      name: storefront.name,
+      slug: storefront.slug,
+      description: storefront.description,
+      imageUrl: storefront.image_url,
+      products: products.map(p => {
+        const productUrl = p.slug ? `${baseUrl}/pay/${p.slug}` : `${baseUrl}/pay/${p.id}`;
+        const requiredFields: RequiredFieldDefinition[] = JSON.parse(p.required_fields || '[]');
+        return {
+          id: p.id,
+          name: p.name,
+          description: p.description,
+          imageUrl: p.image_url,
+          price: p.amount,
+          asset: p.asset,
+          network: p.network,
+          url: productUrl,
+          groupName: p.group_name || undefined,
+          requiredFields: requiredFields.length > 0 ? requiredFields : undefined,
+        };
+      }),
+    });
+    return;
+  }
+
+  // Return HTML for browsers
+  const formatPrice = (amount: string, decimals = 6) => {
+    const num = parseFloat(amount) / Math.pow(10, decimals);
+    return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  // Sort products so grouped items appear together
+  const sortedProducts = [...products].sort((a, b) => {
+    if (a.group_name && b.group_name) return a.group_name.localeCompare(b.group_name);
+    if (a.group_name) return -1;
+    if (b.group_name) return 1;
+    return 0;
+  });
+
+  const productCards = sortedProducts.map(product => {
+    const price = formatPrice(product.amount);
+    const imageUrl = product.image_url || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect fill="%23f3f4f6" width="400" height="300"/%3E%3C/svg%3E';
+    const productUrl = product.slug ? `${baseUrl}/pay/${product.slug}` : `${baseUrl}/pay/${product.id}`;
+    const groupBadge = product.group_name ? `<span class="group-badge">${product.group_name}</span>` : '';
+
+    return `
+      <a href="${productUrl}" class="product-card">
+        <div class="product-image">
+          ${groupBadge}
+          <img src="${imageUrl}" alt="${product.name}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 400 300%22%3E%3Crect fill=%22%23f3f4f6%22 width=%22400%22 height=%22300%22/%3E%3C/svg%3E'" />
+        </div>
+        <div class="product-info">
+          <h3 class="product-name">${product.name}</h3>
+          ${product.description ? `<p class="product-description">${product.description}</p>` : ''}
+          <div class="product-price">$${price} USDC</div>
+        </div>
+      </a>
+    `;
+  }).join('');
+
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${storefront.name} - ${facilitator.name}</title>
+  ${facilitator.favicon ? `<link rel="icon" href="data:image/png;base64,${facilitator.favicon}" type="image/png">` : ''}
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #fafafa; color: #111; min-height: 100vh; }
+    .header { background: #fff; border-bottom: 1px solid #eee; padding: 1.5rem 2rem; position: sticky; top: 0; z-index: 100; }
+    .header-content { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; }
+    .store-name { font-size: 1.5rem; font-weight: 700; }
+    .store-description { color: #666; font-size: 0.875rem; margin-top: 0.25rem; }
+    .powered-by { font-size: 0.75rem; color: #888; }
+    .powered-by a { color: #666; text-decoration: none; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+    .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem; }
+    .product-card { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); transition: transform 0.2s, box-shadow 0.2s; text-decoration: none; color: inherit; }
+    .product-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+    .product-image { aspect-ratio: 4/3; overflow: hidden; background: #f3f4f6; position: relative; }
+    .product-image img { width: 100%; height: 100%; object-fit: cover; }
+    .group-badge { position: absolute; top: 0.5rem; left: 0.5rem; background: rgba(0,0,0,0.7); color: #fff; font-size: 0.7rem; padding: 0.25rem 0.5rem; border-radius: 4px; z-index: 1; }
+    .product-info { padding: 1rem; }
+    .product-name { font-size: 1rem; font-weight: 600; margin-bottom: 0.25rem; }
+    .product-description { font-size: 0.875rem; color: #666; margin-bottom: 0.5rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .product-price { font-size: 1rem; font-weight: 700; }
+    .empty-state { text-align: center; padding: 4rem 2rem; color: #666; }
+    .empty-state h2 { font-size: 1.25rem; margin-bottom: 0.5rem; color: #333; }
+    @media (max-width: 640px) { .product-grid { grid-template-columns: repeat(2, 1fr); gap: 1rem; } .container { padding: 1rem; } }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="header-content">
+      <div>
+        <h1 class="store-name">${storefront.name}</h1>
+        ${storefront.description ? `<p class="store-description">${storefront.description}</p>` : ''}
+      </div>
+      <div class="powered-by">
+        Powered by <a href="https://openfacilitator.io" target="_blank">OpenFacilitator</a>
+      </div>
+    </div>
+  </header>
+  <main class="container">
+    ${products.length > 0 ? `<div class="product-grid">${productCards}</div>` : `<div class="empty-state"><h2>No products available</h2><p>Check back soon!</p></div>`}
+  </main>
+</body>
+</html>
+  `;
+
+  res.setHeader('Content-Type', 'text/html');
+  res.send(html);
+});
+
+/**
  * Storefront - Public page showing all active payment links for a facilitator
  */
 router.get('/store', requireFacilitator, (req: Request, res: Response) => {
@@ -2849,10 +3136,10 @@ router.get('/store', requireFacilitator, (req: Request, res: Response) => {
     return;
   }
 
-  // Get all active payment links for this facilitator
-  const links = getActivePaymentLinks(facilitator.id);
+  // Get all active products for this facilitator
+  const products = getActiveProducts(facilitator.id);
 
-  // Build base URL for links
+  // Build base URL for products
   const baseUrl = facilitator.custom_domain
     ? `https://${facilitator.custom_domain}`
     : `https://${facilitator.subdomain}.openfacilitator.io`;
@@ -2863,20 +3150,30 @@ router.get('/store', requireFacilitator, (req: Request, res: Response) => {
     return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
 
+  // Sort products so grouped items appear together
+  const sortedProducts = [...products].sort((a, b) => {
+    if (a.group_name && b.group_name) return a.group_name.localeCompare(b.group_name);
+    if (a.group_name) return -1;
+    if (b.group_name) return 1;
+    return 0;
+  });
+
   // Generate product cards HTML
-  const productCards = links.map(link => {
-    const price = formatPrice(link.amount);
-    const imageUrl = link.image_url || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect fill="%23f3f4f6" width="400" height="300"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%239ca3af" font-family="system-ui" font-size="48"%3E%3C/text%3E%3C/svg%3E';
-    const linkUrl = link.slug ? `${baseUrl}/pay/${link.slug}` : `${baseUrl}/pay/${link.id}`;
+  const productCards = sortedProducts.map(product => {
+    const price = formatPrice(product.amount);
+    const imageUrl = product.image_url || 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"%3E%3Crect fill="%23f3f4f6" width="400" height="300"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" fill="%239ca3af" font-family="system-ui" font-size="48"%3E%3C/text%3E%3C/svg%3E';
+    const productUrl = product.slug ? `${baseUrl}/pay/${product.slug}` : `${baseUrl}/pay/${product.id}`;
+    const groupBadge = product.group_name ? `<span class="group-badge">${product.group_name}</span>` : '';
 
     return `
-      <a href="${linkUrl}" class="product-card">
+      <a href="${productUrl}" class="product-card">
         <div class="product-image">
-          <img src="${imageUrl}" alt="${link.name}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 400 300%22%3E%3Crect fill=%22%23f3f4f6%22 width=%22400%22 height=%22300%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%239ca3af%22 font-family=%22system-ui%22 font-size=%2248%22%3E%3C/text%3E%3C/svg%3E'" />
+          ${groupBadge}
+          <img src="${imageUrl}" alt="${product.name}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 400 300%22%3E%3Crect fill=%22%23f3f4f6%22 width=%22400%22 height=%22300%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%239ca3af%22 font-family=%22system-ui%22 font-size=%2248%22%3E%3C/text%3E%3C/svg%3E'" />
         </div>
         <div class="product-info">
-          <h3 class="product-name">${link.name}</h3>
-          ${link.description ? `<p class="product-description">${link.description}</p>` : ''}
+          <h3 class="product-name">${product.name}</h3>
+          ${product.description ? `<p class="product-description">${product.description}</p>` : ''}
           <div class="product-price">$${price} USDC</div>
         </div>
       </a>
@@ -2975,12 +3272,25 @@ router.get('/store', requireFacilitator, (req: Request, res: Response) => {
       aspect-ratio: 4/3;
       overflow: hidden;
       background: #f3f4f6;
+      position: relative;
     }
 
     .product-image img {
       width: 100%;
       height: 100%;
       object-fit: cover;
+    }
+
+    .group-badge {
+      position: absolute;
+      top: 0.5rem;
+      left: 0.5rem;
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      font-size: 0.7rem;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      z-index: 1;
     }
 
     .product-info {
@@ -3053,7 +3363,7 @@ router.get('/store', requireFacilitator, (req: Request, res: Response) => {
   </header>
 
   <main class="container">
-    ${links.length > 0 ? `
+    ${products.length > 0 ? `
       <div class="product-grid">
         ${productCards}
       </div>

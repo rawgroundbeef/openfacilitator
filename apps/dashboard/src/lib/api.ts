@@ -185,15 +185,17 @@ export interface ProxyUrlsResponse {
   urls: ProxyUrl[];
 }
 
-export type LinkType = 'payment' | 'redirect' | 'proxy';
+export type ProductType = 'payment' | 'redirect' | 'proxy';
+/** @deprecated Use ProductType instead */
+export type LinkType = ProductType;
 
-export interface PaymentLink {
+export interface Product {
   id: string;
   name: string;
   description: string | null;
   imageUrl: string | null;
   slug: string | null;
-  linkType: LinkType;
+  linkType: ProductType;  // Keep as linkType for API compatibility
   amount: string;
   asset: string;
   network: string;
@@ -202,6 +204,7 @@ export interface PaymentLink {
   method: string;
   headersForward: string[];
   accessTtl: number;
+  groupName: string | null;  // Group name for product variants
   webhookId: string | null;
   webhookUrl: string | null;
   active: boolean;
@@ -215,7 +218,10 @@ export interface PaymentLink {
   updatedAt?: string;
 }
 
-export interface PaymentLinkPayment {
+/** @deprecated Use Product instead */
+export type PaymentLink = Product;
+
+export interface ProductPayment {
   id: string;
   payerAddress: string;
   amount: string;
@@ -225,12 +231,15 @@ export interface PaymentLinkPayment {
   createdAt: string;
 }
 
-export interface CreatePaymentLinkRequest {
+/** @deprecated Use ProductPayment instead */
+export type PaymentLinkPayment = ProductPayment;
+
+export interface CreateProductRequest {
   name: string;
   description?: string;
   imageUrl?: string;
   slug?: string;
-  linkType?: LinkType;
+  linkType?: ProductType;
   amount: string;
   asset: string;
   network: string;
@@ -239,22 +248,76 @@ export interface CreatePaymentLinkRequest {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'ANY';
   headersForward?: string[];
   accessTtl?: number;
+  groupName?: string;  // Group name for product variants
   webhookId?: string;
   webhookUrl?: string;
 }
 
-export interface PaymentLinksResponse {
-  links: PaymentLink[];
+/** @deprecated Use CreateProductRequest instead */
+export type CreatePaymentLinkRequest = CreateProductRequest;
+
+export interface ProductsResponse {
+  products: Product[];
   stats: {
-    totalLinks: number;
-    activeLinks: number;
+    totalProducts: number;
+    activeProducts: number;
     totalPayments: number;
     totalAmountCollected: string;
   };
 }
 
-export interface PaymentLinkDetailResponse extends PaymentLink {
-  payments: PaymentLinkPayment[];
+/** @deprecated Use ProductsResponse instead */
+export type PaymentLinksResponse = ProductsResponse;
+
+export interface ProductDetailResponse extends Product {
+  payments: ProductPayment[];
+}
+
+/** @deprecated Use ProductDetailResponse instead */
+export type PaymentLinkDetailResponse = ProductDetailResponse;
+
+// Storefronts (product collections)
+export interface Storefront {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  imageUrl: string | null;
+  active: boolean;
+  url: string;
+  productCount?: number;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface StorefrontProduct {
+  id: string;
+  name: string;
+  description: string | null;
+  imageUrl: string | null;
+  amount: string;
+  asset: string;
+  network: string;
+  active: boolean;
+}
+
+export interface CreateStorefrontRequest {
+  name: string;
+  slug: string;
+  description?: string;
+  imageUrl?: string;
+}
+
+export interface StorefrontsResponse {
+  storefronts: Storefront[];
+  stats: {
+    totalStorefronts: number;
+    activeStorefronts: number;
+  };
+}
+
+export interface StorefrontDetailResponse extends Storefront {
+  products: StorefrontProduct[];
 }
 
 class ApiClient {
@@ -565,30 +628,30 @@ class ApiClient {
     return data;
   }
 
-  // Payment Links
-  async getPaymentLinks(facilitatorId: string): Promise<PaymentLinksResponse> {
+  // Products (x402 resources)
+  async getProducts(facilitatorId: string): Promise<ProductsResponse> {
     return this.request(`/api/admin/facilitators/${facilitatorId}/payment-links`);
   }
 
-  async createPaymentLink(facilitatorId: string, data: CreatePaymentLinkRequest): Promise<PaymentLink> {
+  async createProduct(facilitatorId: string, data: CreateProductRequest): Promise<Product> {
     return this.request(`/api/admin/facilitators/${facilitatorId}/payment-links`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
-  async getPaymentLink(facilitatorId: string, linkId: string): Promise<PaymentLinkDetailResponse> {
-    return this.request(`/api/admin/facilitators/${facilitatorId}/payment-links/${linkId}`);
+  async getProduct(facilitatorId: string, productId: string): Promise<ProductDetailResponse> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/payment-links/${productId}`);
   }
 
-  async updatePaymentLink(
+  async updateProduct(
     facilitatorId: string,
-    linkId: string,
+    productId: string,
     data: Partial<{
       name: string;
       description: string | null;
       slug: string;
-      linkType: LinkType;
+      linkType: ProductType;
       amount: string;
       asset: string;
       network: string;
@@ -597,23 +660,36 @@ class ApiClient {
       method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'ANY';
       headersForward: string[];
       accessTtl: number;
+      groupName: string | null;
       webhookId: string | null;
       webhookUrl: string | null;
       imageUrl: string | null;
       active: boolean;
     }>
-  ): Promise<PaymentLink> {
-    return this.request(`/api/admin/facilitators/${facilitatorId}/payment-links/${linkId}`, {
+  ): Promise<Product> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/payment-links/${productId}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
   }
 
-  async deletePaymentLink(facilitatorId: string, linkId: string): Promise<void> {
-    return this.request(`/api/admin/facilitators/${facilitatorId}/payment-links/${linkId}`, {
+  async deleteProduct(facilitatorId: string, productId: string): Promise<void> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/payment-links/${productId}`, {
       method: 'DELETE',
     });
   }
+
+  // Backwards compatibility aliases
+  /** @deprecated Use getProducts instead */
+  getPaymentLinks = this.getProducts;
+  /** @deprecated Use createProduct instead */
+  createPaymentLink = this.createProduct;
+  /** @deprecated Use getProduct instead */
+  getPaymentLink = this.getProduct;
+  /** @deprecated Use updateProduct instead */
+  updatePaymentLink = this.updateProduct;
+  /** @deprecated Use deleteProduct instead */
+  deletePaymentLink = this.deleteProduct;
 
   // First-Class Webhooks
   async getWebhooks(facilitatorId: string): Promise<WebhooksResponse> {
@@ -715,6 +791,58 @@ class ApiClient {
 
   async deleteProxyUrl(facilitatorId: string, urlId: string): Promise<void> {
     return this.request(`/api/admin/facilitators/${facilitatorId}/urls/${urlId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Storefronts (product collections)
+  async getStorefronts(facilitatorId: string): Promise<StorefrontsResponse> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/storefronts`);
+  }
+
+  async createStorefront(facilitatorId: string, data: CreateStorefrontRequest): Promise<Storefront> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/storefronts`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getStorefront(facilitatorId: string, storefrontId: string): Promise<StorefrontDetailResponse> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/storefronts/${storefrontId}`);
+  }
+
+  async updateStorefront(
+    facilitatorId: string,
+    storefrontId: string,
+    data: Partial<{
+      name: string;
+      slug: string;
+      description: string | null;
+      imageUrl: string | null;
+      active: boolean;
+    }>
+  ): Promise<Storefront> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/storefronts/${storefrontId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteStorefront(facilitatorId: string, storefrontId: string): Promise<void> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/storefronts/${storefrontId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async addProductToStorefront(facilitatorId: string, storefrontId: string, productId: string): Promise<void> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/storefronts/${storefrontId}/products`, {
+      method: 'POST',
+      body: JSON.stringify({ productId }),
+    });
+  }
+
+  async removeProductFromStorefront(facilitatorId: string, storefrontId: string, productId: string): Promise<void> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/storefronts/${storefrontId}/products/${productId}`, {
       method: 'DELETE',
     });
   }

@@ -113,8 +113,93 @@ export function initializeDatabase(dbPath?: string): Database.Database {
       db.exec("ALTER TABLE payment_links ADD COLUMN image_url TEXT");
       console.log('✅ Added image_url column to payment_links table');
     }
+
+    // Add required_fields column (JSON array of field definitions for variants, shipping, etc.)
+    const hasRequiredFields = paymentLinksColumns.some(col => col.name === 'required_fields');
+    if (paymentLinksColumns.length > 0 && !hasRequiredFields) {
+      db.exec("ALTER TABLE payment_links ADD COLUMN required_fields TEXT NOT NULL DEFAULT '[]'");
+      console.log('✅ Added required_fields column to payment_links table');
+    }
   } catch (e) {
     // Table might not exist yet, that's fine
+  }
+
+  // Migration: Add required_fields to products table (if it exists and was already renamed)
+  try {
+    const productsColumns = db.prepare("PRAGMA table_info(products)").all() as { name: string }[];
+    const hasRequiredFields = productsColumns.some(col => col.name === 'required_fields');
+    if (productsColumns.length > 0 && !hasRequiredFields) {
+      db.exec("ALTER TABLE products ADD COLUMN required_fields TEXT NOT NULL DEFAULT '[]'");
+      console.log('✅ Added required_fields column to products table');
+    }
+  } catch (e) {
+    // Table might not exist yet
+  }
+
+  // Migration: Add metadata column to product_payments table
+  try {
+    const paymentsColumns = db.prepare("PRAGMA table_info(product_payments)").all() as { name: string }[];
+    const hasMetadata = paymentsColumns.some(col => col.name === 'metadata');
+    if (paymentsColumns.length > 0 && !hasMetadata) {
+      db.exec("ALTER TABLE product_payments ADD COLUMN metadata TEXT NOT NULL DEFAULT '{}'");
+      console.log('✅ Added metadata column to product_payments table');
+    }
+  } catch (e) {
+    // Table might not exist yet
+  }
+
+  // Migration: Add group_name column to products table (for variant grouping)
+  try {
+    const productsColumns = db.prepare("PRAGMA table_info(products)").all() as { name: string }[];
+    const hasGroupName = productsColumns.some(col => col.name === 'group_name');
+    if (productsColumns.length > 0 && !hasGroupName) {
+      db.exec("ALTER TABLE products ADD COLUMN group_name TEXT");
+      console.log('✅ Added group_name column to products table');
+    }
+  } catch (e) {
+    // Table might not exist yet
+  }
+
+  // Migration: Rename payment_links → products and payment_link_payments → product_payments
+  try {
+    const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[];
+    const hasPaymentLinks = tables.some(t => t.name === 'payment_links');
+    const hasProducts = tables.some(t => t.name === 'products');
+
+    if (hasPaymentLinks && !hasProducts) {
+      console.log('🔄 Migrating payment_links → products...');
+      db.exec('ALTER TABLE payment_links RENAME TO products');
+      console.log('✅ Renamed payment_links to products');
+    }
+
+    const hasPaymentLinkPayments = tables.some(t => t.name === 'payment_link_payments');
+    const hasProductPayments = tables.some(t => t.name === 'product_payments');
+
+    if (hasPaymentLinkPayments && !hasProductPayments) {
+      console.log('🔄 Migrating payment_link_payments → product_payments...');
+      // Also rename the column payment_link_id → product_id
+      db.exec(`
+        CREATE TABLE product_payments (
+          id TEXT PRIMARY KEY,
+          product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+          payer_address TEXT NOT NULL,
+          amount TEXT NOT NULL,
+          transaction_hash TEXT,
+          status TEXT NOT NULL CHECK (status IN ('pending', 'success', 'failed')),
+          error_message TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        INSERT INTO product_payments (id, product_id, payer_address, amount, transaction_hash, status, error_message, created_at)
+          SELECT id, payment_link_id, payer_address, amount, transaction_hash, status, error_message, created_at
+          FROM payment_link_payments;
+        DROP TABLE payment_link_payments;
+        CREATE INDEX IF NOT EXISTS idx_product_payments_product ON product_payments(product_id);
+        CREATE INDEX IF NOT EXISTS idx_product_payments_status ON product_payments(status);
+      `);
+      console.log('✅ Migrated payment_link_payments to product_payments');
+    }
+  } catch (e) {
+    // Tables might not exist yet
   }
 
   // Migration: Remove CHECK constraint from subscriptions table (only 'starter' tier now)
@@ -296,8 +381,8 @@ export function initializeDatabase(dbPath?: string): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_subscriptions_expires ON subscriptions(expires_at);
     CREATE INDEX IF NOT EXISTS idx_subscriptions_tx_hash ON subscriptions(tx_hash);
 
-    -- Payment Links table (unified links - payment, redirect, or proxy)
-    CREATE TABLE IF NOT EXISTS payment_links (
+    -- Products table (x402 resources - payment, redirect, or proxy types)
+    CREATE TABLE IF NOT EXISTS products (
       id TEXT PRIMARY KEY,
       facilitator_id TEXT NOT NULL REFERENCES facilitators(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
@@ -313,6 +398,8 @@ export function initializeDatabase(dbPath?: string): Database.Database {
       method TEXT NOT NULL DEFAULT 'GET',
       headers_forward TEXT NOT NULL DEFAULT '[]',
       access_ttl INTEGER NOT NULL DEFAULT 0,
+      required_fields TEXT NOT NULL DEFAULT '[]',
+      group_name TEXT,
       webhook_id TEXT REFERENCES webhooks(id) ON DELETE SET NULL,
       webhook_url TEXT,
       webhook_secret TEXT,
@@ -322,23 +409,52 @@ export function initializeDatabase(dbPath?: string): Database.Database {
       UNIQUE(facilitator_id, slug)
     );
 
-    -- Payment Link Payments table (track payments made via links)
-    CREATE TABLE IF NOT EXISTS payment_link_payments (
+    -- Product Payments table (track payments made for products)
+    CREATE TABLE IF NOT EXISTS product_payments (
       id TEXT PRIMARY KEY,
-      payment_link_id TEXT NOT NULL REFERENCES payment_links(id) ON DELETE CASCADE,
+      product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
       payer_address TEXT NOT NULL,
       amount TEXT NOT NULL,
       transaction_hash TEXT,
       status TEXT NOT NULL CHECK (status IN ('pending', 'success', 'failed')),
       error_message TEXT,
+      metadata TEXT NOT NULL DEFAULT '{}',
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
-    CREATE INDEX IF NOT EXISTS idx_payment_links_facilitator ON payment_links(facilitator_id);
-    CREATE INDEX IF NOT EXISTS idx_payment_links_active ON payment_links(active);
-    CREATE INDEX IF NOT EXISTS idx_payment_links_slug ON payment_links(facilitator_id, slug);
-    CREATE INDEX IF NOT EXISTS idx_payment_link_payments_link ON payment_link_payments(payment_link_id);
-    CREATE INDEX IF NOT EXISTS idx_payment_link_payments_status ON payment_link_payments(status);
+    CREATE INDEX IF NOT EXISTS idx_products_facilitator ON products(facilitator_id);
+    CREATE INDEX IF NOT EXISTS idx_products_active ON products(active);
+    CREATE INDEX IF NOT EXISTS idx_products_slug ON products(facilitator_id, slug);
+    CREATE INDEX IF NOT EXISTS idx_product_payments_product ON product_payments(product_id);
+    CREATE INDEX IF NOT EXISTS idx_product_payments_status ON product_payments(status);
+
+    -- Storefronts table (collections of products)
+    CREATE TABLE IF NOT EXISTS storefronts (
+      id TEXT PRIMARY KEY,
+      facilitator_id TEXT NOT NULL REFERENCES facilitators(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      slug TEXT NOT NULL,
+      description TEXT,
+      image_url TEXT,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(facilitator_id, slug)
+    );
+
+    -- Storefront-Products join table (many-to-many)
+    CREATE TABLE IF NOT EXISTS storefront_products (
+      storefront_id TEXT NOT NULL REFERENCES storefronts(id) ON DELETE CASCADE,
+      product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      position INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (storefront_id, product_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_storefronts_facilitator ON storefronts(facilitator_id);
+    CREATE INDEX IF NOT EXISTS idx_storefronts_slug ON storefronts(facilitator_id, slug);
+    CREATE INDEX IF NOT EXISTS idx_storefront_products_storefront ON storefront_products(storefront_id);
+    CREATE INDEX IF NOT EXISTS idx_storefront_products_product ON storefront_products(product_id);
 
     -- Webhooks table (first-class webhook entities)
     CREATE TABLE IF NOT EXISTS webhooks (
@@ -410,10 +526,11 @@ export * from './facilitators.js';
 export * from './transactions.js';
 export * from './user-wallets.js';
 export * from './subscriptions.js';
-export * from './payment-links.js';
+export * from './products.js';
 export * from './webhooks.js';
 export * from './pending-facilitators.js';
-// Re-export proxy-urls selectively to avoid isSlugUnique conflict with payment-links
+export * from './storefronts.js';
+// Re-export proxy-urls selectively to avoid isSlugUnique conflict with products
 export {
   createProxyUrl,
   getProxyUrlById,

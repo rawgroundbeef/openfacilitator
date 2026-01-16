@@ -171,7 +171,7 @@ router.post('/free/verify', async (req: Request, res: Response) => {
 
     if (!facilitatorData) {
       res.status(503).json({
-        valid: false,
+        isValid: false,
         invalidReason: 'Free facilitator not configured',
       });
       return;
@@ -180,7 +180,7 @@ router.post('/free/verify', async (req: Request, res: Response) => {
     const parsed = verifyRequestSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
-        valid: false,
+        isValid: false,
         invalidReason: 'Invalid request format',
         details: parsed.error.issues,
       });
@@ -203,7 +203,7 @@ router.post('/free/verify', async (req: Request, res: Response) => {
         to_address: paymentRequirements.payTo || 'unknown',
         amount: paymentRequirements.maxAmountRequired,
         asset: paymentRequirements.asset,
-        status: result.valid ? 'success' : 'failed',
+        status: result.isValid ? 'success' : 'failed',
         error_message: result.invalidReason,
       });
     }
@@ -212,7 +212,7 @@ router.post('/free/verify', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Free verify error:', error);
     res.status(500).json({
-      valid: false,
+      isValid: false,
       invalidReason: 'Internal server error',
     });
   }
@@ -225,26 +225,35 @@ router.post('/free/settle', async (req: Request, res: Response) => {
   try {
     const facilitatorData = getFreeFacilitatorConfig();
 
+    const parsed = settleRequestSchema.safeParse(req.body);
+    const networkForError = parsed.success ? parsed.data.paymentRequirements.network : '';
+
     if (!facilitatorData) {
       res.status(503).json({
         success: false,
-        errorMessage: 'Free facilitator not configured',
+        transaction: '',
+        payer: '',
+        network: networkForError,
+        errorReason: 'Free facilitator not configured',
       });
       return;
     }
 
-    const parsed = settleRequestSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
         success: false,
-        errorMessage: 'Invalid request format',
+        transaction: '',
+        payer: '',
+        network: networkForError,
+        errorReason: 'Invalid request format',
         details: parsed.error.issues,
       });
       return;
     }
 
+    // After this point, parsed.success is true so we can access the full requirements
+    const paymentRequirements = parsed.data.paymentRequirements;
     const paymentPayload = normalizePaymentPayload(parsed.data.paymentPayload);
-    const { paymentRequirements } = parsed.data;
 
     const facilitator = createFacilitator(facilitatorData.config);
 
@@ -257,7 +266,10 @@ router.post('/free/settle', async (req: Request, res: Response) => {
       if (!facilitatorData.solanaPrivateKey) {
         res.status(503).json({
           success: false,
-          errorMessage: 'Solana not available on free facilitator',
+          transaction: '',
+          payer: '',
+          network: paymentRequirements.network,
+          errorReason: 'Solana not available on free facilitator',
         });
         return;
       }
@@ -266,7 +278,10 @@ router.post('/free/settle', async (req: Request, res: Response) => {
       if (!facilitatorData.evmPrivateKey) {
         res.status(503).json({
           success: false,
-          errorMessage: 'EVM chains not available on free facilitator',
+          transaction: '',
+          payer: '',
+          network: paymentRequirements.network,
+          errorReason: 'EVM chains not available on free facilitator',
         });
         return;
       }
@@ -278,7 +293,7 @@ router.post('/free/settle', async (req: Request, res: Response) => {
     // Log settlement
     const decoded = Buffer.from(paymentPayload, 'base64').toString('utf-8');
     const parsedPayload = JSON.parse(decoded);
-    
+
     // Extract from_address - handle both flat and nested payload structures
     let fromAddress = 'unknown';
     if (isSolana) {
@@ -289,7 +304,7 @@ router.post('/free/settle', async (req: Request, res: Response) => {
       fromAddress = authorization?.from || 'unknown';
     }
 
-    const transaction = createTransaction({
+    const txRecord = createTransaction({
       facilitator_id: 'free-facilitator',
       type: 'settle',
       network: paymentRequirements.network,
@@ -298,12 +313,12 @@ router.post('/free/settle', async (req: Request, res: Response) => {
       amount: paymentRequirements.maxAmountRequired,
       asset: paymentRequirements.asset,
       status: result.success ? 'pending' : 'failed',
-      transaction_hash: result.transactionHash,
-      error_message: result.errorMessage,
+      transaction_hash: result.transaction,
+      error_message: result.errorReason,
     });
 
-    if (result.success && transaction) {
-      updateTransactionStatus(transaction.id, 'success');
+    if (result.success && txRecord) {
+      updateTransactionStatus(txRecord.id, 'success');
     }
 
     res.json(result);
@@ -311,7 +326,10 @@ router.post('/free/settle', async (req: Request, res: Response) => {
     console.error('Free settle error:', error);
     res.status(500).json({
       success: false,
-      errorMessage: 'Internal server error',
+      transaction: '',
+      payer: '',
+      network: '',
+      errorReason: 'Internal server error',
     });
   }
 });

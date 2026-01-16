@@ -16,7 +16,7 @@ import { getDatabase } from '../db/index.js';
 
 export interface ActionContext {
   payerAddress: string;
-  paymentLinkId: string;
+  productId: string;
   amount: string;
   asset: string;
   network: string;

@@ -20,6 +20,7 @@ import {
   Trash2,
   Pencil,
   Upload,
+  Store,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -41,9 +42,10 @@ import { NetworksSection, useNetworkStats } from '@/components/networks-section'
 import { TransactionsTable } from '@/components/transactions-table';
 import { SettlementActivityChart } from '@/components/settlement-activity-chart';
 import { WebhooksSection } from '@/components/webhooks-section';
-import { PaymentLinksSection } from '@/components/payment-links-section';
+import { ProductsSection } from '@/components/products-section';
+import { StorefrontsSection } from '@/components/storefronts-section';
 
-type Tab = 'transactions' | 'payment-links' | 'webhooks' | 'settings';
+type Tab = 'transactions' | 'products' | 'storefronts' | 'webhooks' | 'settings';
 
 function FaviconImage({ url, favicon, size = 'md' }: { url: string; favicon?: string | null; size?: 'md' | 'lg' }) {
   const [hasError, setHasError] = useState(false);
@@ -419,15 +421,26 @@ export default function FacilitatorDetailPage() {
               Transactions
             </button>
             <button
-              onClick={() => setActiveTab('payment-links')}
+              onClick={() => setActiveTab('products')}
               className={cn(
                 'pb-3 text-sm font-medium border-b-2 -mb-px transition-colors',
-                activeTab === 'payment-links'
+                activeTab === 'products'
                   ? 'border-primary text-foreground'
                   : 'border-transparent text-muted-foreground hover:text-foreground'
               )}
             >
-              Links
+              Products
+            </button>
+            <button
+              onClick={() => setActiveTab('storefronts')}
+              className={cn(
+                'pb-3 text-sm font-medium border-b-2 -mb-px transition-colors',
+                activeTab === 'storefronts'
+                  ? 'border-primary text-foreground'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              )}
+            >
+              Storefronts
             </button>
             <button
               onClick={() => setActiveTab('webhooks')}
@@ -455,8 +468,10 @@ export default function FacilitatorDetailPage() {
         </div>
 
         {/* Tab Content */}
-        {activeTab === 'payment-links' ? (
-          <PaymentLinksSection facilitatorId={id} facilitator={facilitator} />
+        {activeTab === 'products' ? (
+          <ProductsSection facilitatorId={id} facilitator={facilitator} />
+        ) : activeTab === 'storefronts' ? (
+          <StorefrontsSection facilitatorId={id} facilitator={facilitator} />
         ) : activeTab === 'webhooks' ? (
           <WebhooksSection facilitatorId={id} facilitator={facilitator} />
         ) : activeTab === 'transactions' ? (

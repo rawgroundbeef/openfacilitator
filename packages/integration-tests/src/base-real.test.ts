@@ -327,8 +327,8 @@ describe('base real transactions', () => {
     console.log('💸 Settle result:', result);
     
     if (result.success) {
-      console.log(`✅ Transaction hash: ${result.transactionHash}`);
-      console.log(`   View: https://basescan.org/tx/${result.transactionHash}`);
+      console.log(`✅ Transaction hash: ${result.transaction}`);
+      console.log(`   View: https://basescan.org/tx/${result.transaction}`);
     }
     
     expect(result).toBeDefined();
