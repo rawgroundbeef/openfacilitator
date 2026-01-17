@@ -1104,19 +1104,36 @@ async function handleRequest(paymentPayload, requirements) {
                                   size="sm"
                                   variant="outline"
                                   onClick={() => rejectClaim(claim.id)}
+                                  disabled={processingClaims.has(claim.id)}
                                 >
-                                  Reject
+                                  {processingClaims.has(claim.id) ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    'Reject'
+                                  )}
                                 </Button>
                                 <Button
                                   size="sm"
                                   onClick={() => approveClaim(claim.id)}
+                                  disabled={processingClaims.has(claim.id)}
                                 >
-                                  Approve
+                                  {processingClaims.has(claim.id) ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    'Approve'
+                                  )}
                                 </Button>
                               </>
                             )}
                             {claim.status === 'approved' && (
-                              <Button size="sm" onClick={() => executePayout(claim.id)}>
+                              <Button
+                                size="sm"
+                                onClick={() => executePayout(claim.id)}
+                                disabled={processingClaims.has(claim.id)}
+                              >
+                                {processingClaims.has(claim.id) ? (
+                                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                ) : null}
                                 Execute Payout
                               </Button>
                             )}
