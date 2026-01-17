@@ -488,19 +488,6 @@ router.post('/demo/unreliable', async (req: Request, res: Response) => {
       return;
     }
 
-    // Log the transaction
-    createTransaction({
-      facilitator_id: 'demo',
-      type: 'settle',
-      network: paymentRequirements.network,
-      from_address: settleResult.payer || 'unknown',
-      to_address: paymentRequirements.payTo,
-      amount: paymentRequirements.maxAmountRequired,
-      asset: paymentRequirements.asset,
-      status: 'success',
-      transaction_hash: settleResult.transaction,
-    });
-
     // RANDOMLY FAIL ~50% of the time
     const shouldFail = Math.random() < 0.5;
 
@@ -509,6 +496,11 @@ router.post('/demo/unreliable', async (req: Request, res: Response) => {
       const demoApiKey = process.env.DEMO_REFUND_API_KEY;
       let refundReported = false;
       let claimId: string | undefined;
+
+      console.log('[demo/unreliable] Failure triggered, reporting refund...');
+      console.log('[demo/unreliable] API key configured:', !!demoApiKey);
+      console.log('[demo/unreliable] Transaction:', settleResult.transaction);
+      console.log('[demo/unreliable] Payer:', settleResult.payer);
 
       if (demoApiKey && settleResult.transaction && settleResult.payer) {
         const claimResult = await reportFailure({
@@ -520,8 +512,11 @@ router.post('/demo/unreliable', async (req: Request, res: Response) => {
           network: paymentRequirements.network,
           reason: 'Demo endpoint simulated failure',
         });
+        console.log('[demo/unreliable] Refund report result:', claimResult);
         refundReported = claimResult.success;
         claimId = claimResult.claimId;
+      } else {
+        console.log('[demo/unreliable] Skipping refund report - missing data');
       }
 
       // Return failure response with refund info
