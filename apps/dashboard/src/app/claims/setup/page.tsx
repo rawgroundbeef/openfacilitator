@@ -120,7 +120,7 @@ function ClaimsSetupContent() {
   const router = useRouter();
   const facilitatorParam = searchParams.get('facilitator') || '';
 
-  const [facilitator, setFacilitator] = useState(facilitatorParam);
+  const facilitator = facilitatorParam;
   const [user, setUser] = useState<User | null>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [resourceOwner, setResourceOwner] = useState<ResourceOwner | null>(null);
@@ -495,26 +495,26 @@ function ClaimsSetupContent() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid gap-2">
-                <div className="flex items-center gap-1">
-                  <Label htmlFor="facilitator">Facilitator</Label>
-                  <div className="relative group">
-                    <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-popover text-popover-foreground text-xs rounded-md shadow-lg border opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none w-48 z-50">
-                      A facilitator handles x402 payments on your behalf. Enter the domain or subdomain of the facilitator you&apos;re using.
+              {facilitator ? (
+                <div className="grid gap-2">
+                  <div className="flex items-center gap-1">
+                    <Label>Facilitator</Label>
+                    <div className="relative group">
+                      <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-popover text-popover-foreground text-xs rounded-md shadow-lg border opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none w-48 z-50">
+                        A facilitator handles x402 payments on your behalf.
+                      </div>
                     </div>
                   </div>
+                  <div className="px-3 py-2 rounded-md bg-muted border text-sm font-medium">
+                    {facilitator}
+                  </div>
                 </div>
-                <Input
-                  id="facilitator"
-                  value={facilitator}
-                  onChange={(e) => setFacilitator(e.target.value)}
-                  placeholder="e.g., pay.example.com or my-app"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Enter the facilitator domain or subdomain you want to use for refund protection.
-                </p>
-              </div>
+              ) : (
+                <div className="p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+                  No facilitator specified. Please use a valid setup link from your facilitator.
+                </div>
+              )}
 
               <Button
                 onClick={() => router.push(`/auth/signin?callbackUrl=${encodeURIComponent(`/claims/setup?facilitator=${facilitator}`)}`)}
