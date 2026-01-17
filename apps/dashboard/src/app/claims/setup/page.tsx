@@ -129,7 +129,6 @@ function ClaimsSetupContent() {
 
   // Registration form
   const [regName, setRegName] = useState('');
-  const [regRefundAddress, setRegRefundAddress] = useState('');
 
   // Data states
   const [wallets, setWallets] = useState<RefundWallet[]>([]);
@@ -257,7 +256,6 @@ function ClaimsSetupContent() {
         body: JSON.stringify({
           facilitator,
           name: regName || undefined,
-          refundAddress: regRefundAddress || undefined,
         }),
       });
 
@@ -566,24 +564,6 @@ function ClaimsSetupContent() {
                   value={regName}
                   onChange={(e) => setRegName(e.target.value)}
                   placeholder="My API Service"
-                />
-              </div>
-
-              <div className="grid gap-2">
-                <div className="flex items-center gap-1">
-                  <Label htmlFor="regRefundAddress">Refund Address (optional)</Label>
-                  <div className="relative group">
-                    <HelpCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-popover text-popover-foreground text-xs rounded-md shadow-lg border opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none w-48 z-50">
-                      A wallet address where you can receive refunds. You can add this later.
-                    </div>
-                  </div>
-                </div>
-                <Input
-                  id="regRefundAddress"
-                  value={regRefundAddress}
-                  onChange={(e) => setRegRefundAddress(e.target.value)}
-                  placeholder="0x..."
                 />
               </div>
 

@@ -61,7 +61,6 @@ export function RefundsSection({ facilitatorId, facilitator }: RefundsSectionPro
 
   // Registration form state
   const [regName, setRegName] = useState('');
-  const [regRefundAddress, setRegRefundAddress] = useState('');
   const [isRegistering, setIsRegistering] = useState(false);
   const [registrationError, setRegistrationError] = useState<string | null>(null);
 
@@ -134,11 +133,9 @@ export function RefundsSection({ facilitatorId, facilitator }: RefundsSectionPro
     try {
       await api.registerAsResourceOwner(facilitatorIdentifier, {
         name: regName || undefined,
-        refundAddress: regRefundAddress || undefined,
       });
       queryClient.invalidateQueries({ queryKey: ['myResourceOwner', facilitatorIdentifier] });
       setRegName('');
-      setRegRefundAddress('');
     } catch (err) {
       setRegistrationError(err instanceof Error ? err.message : 'Registration failed');
     } finally {
@@ -269,19 +266,6 @@ export function RefundsSection({ facilitatorId, facilitator }: RefundsSectionPro
                       onChange={(e) => setRegName(e.target.value)}
                       placeholder="My API Service"
                     />
-                  </div>
-
-                  <div className="grid gap-2">
-                    <Label htmlFor="regRefundAddress">Refund Address (optional)</Label>
-                    <Input
-                      id="regRefundAddress"
-                      value={regRefundAddress}
-                      onChange={(e) => setRegRefundAddress(e.target.value)}
-                      placeholder="0x..."
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      A wallet address where you can receive refunds.
-                    </p>
                   </div>
 
                   <Button onClick={handleRegister} disabled={isRegistering}>
