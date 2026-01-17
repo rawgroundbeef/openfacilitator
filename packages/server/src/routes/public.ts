@@ -398,21 +398,25 @@ router.get('/free/info', (_req: Request, res: Response) => {
  * POST /demo/unreliable - Process payment and randomly fail
  */
 router.get('/demo/unreliable', (_req: Request, res: Response) => {
-  // Return 402 with payment requirements
+  const facilitatorData = getFreeFacilitatorConfig();
+  const feePayer = facilitatorData?.evmAddress;
+
   const requirements = {
     scheme: 'exact',
-    network: 'base',
+    network: 'eip155:8453', // CAIP-2 Base mainnet
     maxAmountRequired: '100000', // 0.10 USDC
     asset: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
     payTo: process.env.TREASURY_BASE!,
     resource: 'https://api.openfacilitator.io/demo/unreliable',
     description: 'Demo endpoint that randomly fails ~50% of the time (for testing refund protection)',
+    extra: feePayer ? { feePayer } : undefined,
   };
 
   res.status(402).json({
-    error: 'Payment Required',
+    x402Version: 2,
     accepts: [requirements],
-    x402Version: 1,
+    error: 'Payment Required',
+    message: 'This endpoint requires a $0.10 USDC payment via x402 (base)',
   });
 });
 
@@ -430,19 +434,23 @@ router.post('/demo/unreliable', async (req: Request, res: Response) => {
     // Get payment from header
     const paymentHeader = req.headers['x-payment'] as string;
     console.log('[demo/unreliable] x-payment header present:', !!paymentHeader);
+    const feePayer = facilitatorData.evmAddress;
+
     if (!paymentHeader) {
       res.status(402).json({
-        error: 'Payment Required',
+        x402Version: 2,
         accepts: [{
           scheme: 'exact',
-          network: 'base',
+          network: 'eip155:8453',
           maxAmountRequired: '100000',
           asset: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
           payTo: process.env.TREASURY_BASE!,
           resource: 'https://api.openfacilitator.io/demo/unreliable',
           description: 'Demo endpoint that randomly fails ~50% of the time',
+          extra: feePayer ? { feePayer } : undefined,
         }],
-        x402Version: 1,
+        error: 'Payment Required',
+        message: 'This endpoint requires a $0.10 USDC payment via x402 (base)',
       });
       return;
     }
@@ -458,7 +466,7 @@ router.post('/demo/unreliable', async (req: Request, res: Response) => {
 
     const paymentRequirements = {
       scheme: 'exact',
-      network: 'base',
+      network: 'eip155:8453',
       maxAmountRequired: '100000',
       asset: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
       payTo: process.env.TREASURY_BASE!,
