@@ -496,18 +496,37 @@ router.post('/demo/unreliable', async (req: Request, res: Response) => {
     const shouldFail = Math.random() < 0.5;
 
     if (shouldFail) {
+      // Report failure for refund if API key is configured
+      const demoApiKey = process.env.DEMO_REFUND_API_KEY;
+      let refundReported = false;
+      let claimId: string | undefined;
+
+      if (demoApiKey && settleResult.transaction && settleResult.payer) {
+        const claimResult = await reportFailure({
+          apiKey: demoApiKey,
+          originalTxHash: settleResult.transaction,
+          userWallet: settleResult.payer,
+          amount: paymentRequirements.maxAmountRequired,
+          asset: paymentRequirements.asset,
+          network: paymentRequirements.network,
+          reason: 'Demo endpoint simulated failure',
+        });
+        refundReported = claimResult.success;
+        claimId = claimResult.claimId;
+      }
+
       // Return failure response with refund info
       res.status(500).json({
         success: false,
         error: 'Simulated random failure',
         message: 'This endpoint randomly fails to demonstrate refund protection.',
-        refundEligible: true,
+        refundReported,
+        claimId,
         transactionHash: settleResult.transaction,
         payer: settleResult.payer,
         amount: paymentRequirements.maxAmountRequired,
         asset: paymentRequirements.asset,
         network: paymentRequirements.network,
-        note: 'If you have set up refund protection with the SDK middleware, this failure would have been automatically reported for a refund.',
       });
       return;
     }
@@ -534,7 +553,7 @@ router.post('/demo/unreliable', async (req: Request, res: Response) => {
 
 /**
  * POST /claims/report-failure - Report a failure from a registered server
- * Header: X-Server-Api-Key
+ * Header: X-Server-Api-Key (required)
  */
 router.post('/claims/report-failure', async (req: Request, res: Response) => {
   try {
