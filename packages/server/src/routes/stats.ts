@@ -15,11 +15,11 @@ const STATS_PRICE_ATOMIC = '5000000'; // $5 USDC (6 decimals)
 
 // Solana config (USDC mint is constant, treasury configurable)
 const USDC_SOLANA_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
-const SOLANA_TREASURY = process.env.TREASURY_SOLANA || 'EnjogokdsxF7aK4bQ1KdJwzKbWePSpwKSHDgPy16GBuT';
+const SOLANA_TREASURY = process.env.TREASURY_SOLANA!;
 
 // Base config (USDC address is constant, treasury configurable)
 const USDC_BASE = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
-const BASE_TREASURY = process.env.TREASURY_BASE || '0xECfb34867Cc542E4B56E4Ed9161Eb704976710ce';
+const BASE_TREASURY = process.env.TREASURY_BASE!;
 
 // Facilitator endpoint (configurable for self-hosted deployments)
 const FACILITATOR_URL = process.env.STATS_FACILITATOR_URL || 'https://pay.openfacilitator.io';

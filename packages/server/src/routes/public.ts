@@ -404,7 +404,7 @@ router.get('/demo/unreliable', (_req: Request, res: Response) => {
     network: 'base',
     maxAmountRequired: '100000', // 0.10 USDC
     asset: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-    payTo: process.env.TREASURY_BASE || '0xECfb34867Cc542E4B56E4Ed9161Eb704976710ce',
+    payTo: process.env.TREASURY_BASE!,
     resource: 'https://api.openfacilitator.io/demo/unreliable',
     description: 'Demo endpoint that randomly fails ~50% of the time (for testing refund protection)',
   };
@@ -438,7 +438,7 @@ router.post('/demo/unreliable', async (req: Request, res: Response) => {
           network: 'base',
           maxAmountRequired: '100000',
           asset: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-          payTo: process.env.TREASURY_BASE || '0xECfb34867Cc542E4B56E4Ed9161Eb704976710ce',
+          payTo: process.env.TREASURY_BASE!,
           resource: 'https://api.openfacilitator.io/demo/unreliable',
           description: 'Demo endpoint that randomly fails ~50% of the time',
         }],
@@ -461,7 +461,7 @@ router.post('/demo/unreliable', async (req: Request, res: Response) => {
       network: 'base',
       maxAmountRequired: '100000',
       asset: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-      payTo: process.env.TREASURY_BASE || '0xECfb34867Cc542E4B56E4Ed9161Eb704976710ce',
+      payTo: process.env.TREASURY_BASE!,
       resource: 'https://api.openfacilitator.io/demo/unreliable',
     };
 
