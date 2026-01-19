@@ -23,6 +23,7 @@ import { sendSettlementWebhook, deliverWebhook, generateWebhookSecret, type Prod
 import { executeAction, type ActionResult } from '../services/actions.js';
 import { getWebhookById } from '../db/webhooks.js';
 import { getProxyUrlBySlug } from '../db/proxy-urls.js';
+import { createNonceValidator } from '../services/nonce-validator-adapter.js';
 import type { Hex } from 'viem';
 
 const router: IRouter = Router();
@@ -344,6 +345,7 @@ router.get('/supported', requireFacilitator, (req: Request, res: Response) => {
     supportedTokens: JSON.parse(record.supported_tokens) as TokenConfig[],
     createdAt: new Date(record.created_at),
     updatedAt: new Date(record.updated_at),
+    nonceValidator: createNonceValidator(record.id), // SECURITY: Persistent nonce tracking
   };
 
   const facilitator = createFacilitator(config);
@@ -421,6 +423,7 @@ router.post('/verify', requireFacilitator, async (req: Request, res: Response) =
       supportedTokens: JSON.parse(record.supported_tokens) as TokenConfig[],
       createdAt: new Date(record.created_at),
       updatedAt: new Date(record.updated_at),
+      nonceValidator: createNonceValidator(record.id), // SECURITY: Persistent nonce tracking
     };
 
     const facilitator = createFacilitator(config);
@@ -484,6 +487,7 @@ router.post('/settle', requireFacilitator, async (req: Request, res: Response) =
       supportedTokens: JSON.parse(record.supported_tokens) as TokenConfig[],
       createdAt: new Date(record.created_at),
       updatedAt: new Date(record.updated_at),
+      nonceValidator: createNonceValidator(record.id), // SECURITY: Persistent nonce tracking
     };
 
     const facilitator = createFacilitator(config);

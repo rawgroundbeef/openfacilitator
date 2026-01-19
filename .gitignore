@@ -44,4 +44,10 @@ coverage/
 *.tgz
 .cache/
 
+# Documentation files
+CONTRIBUTION_JUSTIFICATION.md
+CONTRIBUTION_OPPORTUNITIES.md
+MAINTAINER_ANALYSIS.md
+PERSISTENT_NONCE_TRACKING.md
+
 .github/workflows/integration-tests.yml

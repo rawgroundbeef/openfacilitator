@@ -9,6 +9,10 @@ export const NETWORKS: NetworkInfo[] = [
   { v1Id: 'iotex', v2Id: 'eip155:4689', name: 'IoTeX', type: 'evm', chainId: 4689, testnet: false },
   { v1Id: 'peaq', v2Id: 'eip155:3338', name: 'Peaq', type: 'evm', chainId: 3338, testnet: false },
   { v1Id: 'xlayer', v2Id: 'eip155:196', name: 'X Layer', type: 'evm', chainId: 196, testnet: false },
+  { v1Id: 'arbitrum', v2Id: 'eip155:42161', name: 'Arbitrum', type: 'evm', chainId: 42161, testnet: false },
+  { v1Id: 'optimism', v2Id: 'eip155:10', name: 'Optimism', type: 'evm', chainId: 10, testnet: false },
+  { v1Id: 'bnb', v2Id: 'eip155:56', name: 'BNB Chain', type: 'evm', chainId: 56, testnet: false },
+  { v1Id: 'linea', v2Id: 'eip155:59144', name: 'Linea', type: 'evm', chainId: 59144, testnet: false },
 
   // EVM Testnets
   { v1Id: 'base-sepolia', v2Id: 'eip155:84532', name: 'Base Sepolia', type: 'evm', chainId: 84532, testnet: true },
@@ -16,6 +20,10 @@ export const NETWORKS: NetworkInfo[] = [
   { v1Id: 'avalanche-fuji', v2Id: 'eip155:43113', name: 'Avalanche Fuji', type: 'evm', chainId: 43113, testnet: true },
   { v1Id: 'sei-testnet', v2Id: 'eip155:1328', name: 'Sei Testnet', type: 'evm', chainId: 1328, testnet: true },
   { v1Id: 'xlayer-testnet', v2Id: 'eip155:195', name: 'X Layer Testnet', type: 'evm', chainId: 195, testnet: true },
+  { v1Id: 'arbitrum-sepolia', v2Id: 'eip155:421614', name: 'Arbitrum Sepolia', type: 'evm', chainId: 421614, testnet: true },
+  { v1Id: 'optimism-sepolia', v2Id: 'eip155:11155420', name: 'Optimism Sepolia', type: 'evm', chainId: 11155420, testnet: true },
+  { v1Id: 'bnb-testnet', v2Id: 'eip155:97', name: 'BNB Chain Testnet', type: 'evm', chainId: 97, testnet: true },
+  { v1Id: 'linea-goerli', v2Id: 'eip155:59140', name: 'Linea Goerli', type: 'evm', chainId: 59140, testnet: true },
 
   // Solana
   { v1Id: 'solana', v2Id: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp', name: 'Solana', type: 'solana', testnet: false },

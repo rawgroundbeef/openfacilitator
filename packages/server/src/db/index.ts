@@ -507,6 +507,23 @@ export function initializeDatabase(dbPath?: string): Database.Database {
     CREATE INDEX IF NOT EXISTS idx_proxy_urls_facilitator ON proxy_urls(facilitator_id);
     CREATE INDEX IF NOT EXISTS idx_proxy_urls_slug ON proxy_urls(facilitator_id, slug);
 
+    -- Used nonces table (persistent replay attack prevention)
+    -- SECURITY: This table ensures nonce uniqueness across server restarts
+    -- Each ERC-3009 authorization can only be settled once
+    CREATE TABLE IF NOT EXISTS used_nonces (
+      nonce TEXT NOT NULL,
+      from_address TEXT NOT NULL,
+      chain_id INTEGER NOT NULL,
+      facilitator_id TEXT NOT NULL,
+      transaction_hash TEXT,
+      used_at TEXT NOT NULL DEFAULT (datetime('now')),
+      expires_at TEXT NOT NULL,
+      PRIMARY KEY (nonce, from_address, chain_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_nonces_expires ON used_nonces(expires_at);
+    CREATE INDEX IF NOT EXISTS idx_nonces_facilitator ON used_nonces(facilitator_id);
+
     -- Refund configuration per facilitator (global enable/disable)
     CREATE TABLE IF NOT EXISTS refund_configs (
       id TEXT PRIMARY KEY,

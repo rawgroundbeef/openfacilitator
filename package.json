@@ -13,7 +13,8 @@
     "dev": "turbo dev",
     "lint": "turbo lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "clean": "turbo clean && rm -rf node_modules"
+    "clean": "turbo clean && rm -rf node_modules",
+    "of:doctor": "pnpm -C packages/server run of:doctor"
   },
   "packageManager": "pnpm@9.14.2",
   "engines": {

@@ -195,9 +195,15 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { 
   avalanche, 
   avalancheFuji,
+  arbitrum,
+  arbitrumSepolia,
   base, 
-  baseSepolia, 
+  baseSepolia,
+  bsc,
+  bscTestnet,
   mainnet, 
+  optimism,
+  optimismSepolia,
   polygon,
   polygonAmoy,
   sepolia,
@@ -282,6 +288,23 @@ const xlayerTestnet = defineChain({
   testnet: true,
 });
 
+const linea = defineChain({
+  id: 59144,
+  name: 'Linea',
+  nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+  rpcUrls: { default: { http: ['https://rpc.linea.build'] } },
+  blockExplorers: { default: { name: 'LineaScan', url: 'https://lineascan.build' } },
+});
+
+const lineaGoerli = defineChain({
+  id: 59140,
+  name: 'Linea Goerli',
+  nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+  rpcUrls: { default: { http: ['https://rpc.goerli.linea.build'] } },
+  blockExplorers: { default: { name: 'LineaScan Goerli', url: 'https://goerli.lineascan.build' } },
+  testnet: true,
+});
+
 /**
  * Chain configuration for settlement
  */
@@ -295,6 +318,10 @@ const chainConfigs: Record<number, { chain: Chain; rpcUrl: string }> = {
   137: { chain: polygon, rpcUrl: process.env.POLYGON_RPC_URL || 'https://polygon-rpc.com' },
   1329: { chain: sei, rpcUrl: process.env.SEI_RPC_URL || 'https://evm-rpc.sei-apis.com' },
   196: { chain: xlayer, rpcUrl: process.env.XLAYER_RPC_URL || 'https://rpc.xlayer.tech' },
+  42161: { chain: arbitrum, rpcUrl: process.env.ARBITRUM_RPC_URL || 'https://arb1.arbitrum.io/rpc' },
+  10: { chain: optimism, rpcUrl: process.env.OPTIMISM_RPC_URL || 'https://mainnet.optimism.io' },
+  56: { chain: bsc, rpcUrl: process.env.BNB_RPC_URL || 'https://bsc-dataseed1.binance.org' },
+  59144: { chain: linea, rpcUrl: process.env.LINEA_RPC_URL || 'https://rpc.linea.build' },
   // Testnets
   43113: { chain: avalancheFuji, rpcUrl: process.env.AVALANCHE_FUJI_RPC_URL || 'https://api.avax-test.network/ext/bc/C/rpc' },
   84532: { chain: baseSepolia, rpcUrl: process.env.BASE_SEPOLIA_RPC_URL || 'https://sepolia.base.org' },
@@ -302,6 +329,10 @@ const chainConfigs: Record<number, { chain: Chain; rpcUrl: string }> = {
   1328: { chain: seiTestnet, rpcUrl: process.env.SEI_TESTNET_RPC_URL || 'https://evm-rpc-testnet.sei-apis.com' },
   11155111: { chain: sepolia, rpcUrl: process.env.SEPOLIA_RPC_URL || 'https://rpc.sepolia.org' },
   195: { chain: xlayerTestnet, rpcUrl: process.env.XLAYER_TESTNET_RPC_URL || 'https://testrpc.xlayer.tech' },
+  421614: { chain: arbitrumSepolia, rpcUrl: process.env.ARBITRUM_SEPOLIA_RPC_URL || 'https://sepolia-rollup.arbitrum.io/rpc' },
+  11155420: { chain: optimismSepolia, rpcUrl: process.env.OPTIMISM_SEPOLIA_RPC_URL || 'https://sepolia.optimism.io' },
+  97: { chain: bscTestnet, rpcUrl: process.env.BNB_TESTNET_RPC_URL || 'https://data-seed-prebsc-1-s1.binance.org:8545' },
+  59140: { chain: lineaGoerli, rpcUrl: process.env.LINEA_GOERLI_RPC_URL || 'https://rpc.goerli.linea.build' },
 };
 
 export interface ERC3009Authorization {
@@ -313,12 +344,20 @@ export interface ERC3009Authorization {
   nonce: Hex;
 }
 
+// Import NonceValidator type from types.ts to avoid duplication
+import type { NonceValidator } from './types.js';
+
 export interface SettlementParams {
   chainId: number;
   tokenAddress: Address;
   authorization: ERC3009Authorization;
   signature: Hex;
   facilitatorPrivateKey: Hex;
+  /**
+   * Optional external nonce validator for persistent tracking
+   * If not provided, falls back to in-memory validation only
+   */
+  nonceValidator?: NonceValidator;
 }
 
 export interface SettlementResult {
@@ -334,7 +373,7 @@ export interface SettlementResult {
 export async function executeERC3009Settlement(
   params: SettlementParams
 ): Promise<SettlementResult> {
-  const { chainId, tokenAddress, authorization, signature, facilitatorPrivateKey } = params;
+  const { chainId, tokenAddress, authorization, signature, facilitatorPrivateKey, nonceValidator } = params;
 
   console.log('[ERC3009Settlement] Starting settlement:', {
     chainId,
@@ -345,21 +384,53 @@ export async function executeERC3009Settlement(
     nonce: authorization.nonce,
     validAfter: authorization.validAfter,
     validBefore: authorization.validBefore,
+    hasPersistentValidator: !!nonceValidator,
   });
 
-  // Deduplication: prevent double-submission of same nonce
-  if (!tryAcquireNonce(chainId, authorization.from, authorization.nonce)) {
-    console.warn('[ERC3009Settlement] DUPLICATE BLOCKED: Nonce already being processed:', authorization.nonce);
+  // Nonce validation with two-tier approach:
+  // 1. If external validator provided (server with database), use it for persistent tracking
+  // 2. Otherwise, fall back to in-memory cache only
+  let nonceAcquired = false;
+  let nonceRejectionReason: string | undefined;
+
+  if (nonceValidator) {
+    // Use external persistent validator (L1 cache + L2 database)
+    const result = await nonceValidator.tryAcquire({
+      nonce: authorization.nonce,
+      from: authorization.from,
+      chainId,
+      expiresAt: authorization.validBefore,
+    });
+    nonceAcquired = result.acquired;
+    nonceRejectionReason = result.reason;
+  } else {
+    // Fall back to in-memory only (L1 cache)
+    nonceAcquired = tryAcquireNonce(chainId, authorization.from, authorization.nonce);
+    if (!nonceAcquired) {
+      nonceRejectionReason = 'This authorization is already being processed (in-memory cache)';
+    }
+  }
+
+  if (!nonceAcquired) {
+    console.warn('[ERC3009Settlement] DUPLICATE BLOCKED:', {
+      nonce: authorization.nonce,
+      reason: nonceRejectionReason,
+    });
     return {
       success: false,
-      errorMessage: 'Duplicate submission: this authorization is already being processed',
+      errorMessage: nonceRejectionReason || 'Duplicate submission: this authorization is already being processed',
     };
   }
 
   // Get chain config
   const config = chainConfigs[chainId];
   if (!config) {
-    releaseNonce(chainId, authorization.from, authorization.nonce);
+    // Release nonce on early failure (before on-chain submission)
+    if (nonceValidator?.release) {
+      nonceValidator.release(authorization.nonce, authorization.from, chainId);
+    } else {
+      releaseNonce(chainId, authorization.from, authorization.nonce);
+    }
     return {
       success: false,
       errorMessage: `Unsupported chain ID: ${chainId}`,
@@ -416,7 +487,12 @@ export async function executeERC3009Settlement(
     
     if (ethBalance < 100000n * gasPrice) {
       console.error('[ERC3009Settlement] Insufficient ETH for gas!');
-      releaseNonce(chainId, authorization.from, authorization.nonce);
+      // Release nonce on early failure (before on-chain submission)
+      if (nonceValidator?.release) {
+        nonceValidator.release(authorization.nonce, authorization.from, chainId);
+      } else {
+        releaseNonce(chainId, authorization.from, authorization.nonce);
+      }
       return {
         success: false,
         errorMessage: 'Facilitator has insufficient ETH for gas',
@@ -514,6 +590,12 @@ export async function executeERC3009Settlement(
 
     if (receipt.status === 'success') {
       console.log('[ERC3009Settlement] SUCCESS!');
+
+      // Mark nonce as successfully settled with transaction hash
+      if (nonceValidator?.markSettled) {
+        nonceValidator.markSettled(authorization.nonce, authorization.from, chainId, hash);
+      }
+
       return {
         success: true,
         transactionHash: hash,
@@ -556,7 +638,13 @@ export async function executeERC3009Settlement(
     console.error('[ERC3009Settlement] Error:', error);
     const errMsg = error instanceof Error ? error.message : 'Unknown error during settlement';
     // Release nonce on error so user can retry with same auth if it wasn't submitted
-    releaseNonce(chainId, authorization.from, authorization.nonce);
+    // SECURITY NOTE: We only release from cache, NOT from database
+    // This prevents retry after database has recorded the nonce
+    if (nonceValidator?.release) {
+      nonceValidator.release(authorization.nonce, authorization.from, chainId);
+    } else {
+      releaseNonce(chainId, authorization.from, authorization.nonce);
+    }
     return {
       success: false,
       errorMessage: errMsg,

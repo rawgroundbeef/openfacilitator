@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { createServer } from './server.js';
 import { initializeDatabase } from './db/index.js';
 import { initializeAuth } from './auth/index.js';
+import { startNonceCleanupJob } from './services/nonce-cleanup.js';
 
 const PORT = parseInt(process.env.PORT || '5002', 10);
 const HOST = process.env.HOST || '0.0.0.0';
@@ -14,6 +15,10 @@ async function main() {
   // Initialize auth
   initializeAuth(DATABASE_PATH);
 
+  // SECURITY: Start background cleanup job for expired nonces
+  // This prevents unbounded growth of the used_nonces table
+  const stopCleanup = startNonceCleanupJob();
+
   // Create and start server
   const app = createServer();
 
@@ -21,6 +26,19 @@ async function main() {
     console.log(`🚀 OpenFacilitator server running at http://${HOST}:${PORT}`);
     console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`   Database: ${DATABASE_PATH}`);
+  });
+
+  // Graceful shutdown
+  process.on('SIGTERM', () => {
+    console.log('SIGTERM received, shutting down gracefully...');
+    stopCleanup();
+    process.exit(0);
+  });
+
+  process.on('SIGINT', () => {
+    console.log('SIGINT received, shutting down gracefully...');
+    stopCleanup();
+    process.exit(0);
   });
 }
 

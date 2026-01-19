@@ -28,6 +28,21 @@ export interface TokenConfig {
 }
 
 /**
+ * Optional nonce validator interface for persistent replay protection
+ * Allows external systems (like the server) to inject persistent nonce tracking
+ */
+export interface NonceValidator {
+  tryAcquire(params: {
+    nonce: string;
+    from: string;
+    chainId: number;
+    expiresAt: number;
+  }): { acquired: boolean; reason?: string } | Promise<{ acquired: boolean; reason?: string }>;
+  release?(nonce: string, from: string, chainId: number): void;
+  markSettled?(nonce: string, from: string, chainId: number, txHash: string): void;
+}
+
+/**
  * Facilitator configuration
  */
 export interface FacilitatorConfig {
@@ -40,6 +55,8 @@ export interface FacilitatorConfig {
   supportedTokens: TokenConfig[];
   createdAt: Date;
   updatedAt: Date;
+  /** Optional nonce validator for persistent replay protection */
+  nonceValidator?: NonceValidator;
 }
 
 /**

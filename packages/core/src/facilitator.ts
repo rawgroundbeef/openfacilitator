@@ -2,9 +2,15 @@ import { createPublicClient, http, type Hex, type Address, type Chain, defineCha
 import { 
   avalanche, 
   avalancheFuji,
+  arbitrum,
+  arbitrumSepolia,
   base, 
   baseSepolia, 
+  bsc,
+  bscTestnet,
   mainnet, 
+  optimism,
+  optimismSepolia,
   polygon,
   polygonAmoy,
   sepolia,
@@ -76,6 +82,23 @@ const xlayerTestnet = defineChain({
   testnet: true,
 });
 
+const linea = defineChain({
+  id: 59144,
+  name: 'Linea',
+  nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+  rpcUrls: { default: { http: ['https://rpc.linea.build'] } },
+  blockExplorers: { default: { name: 'LineaScan', url: 'https://lineascan.build' } },
+});
+
+const lineaGoerli = defineChain({
+  id: 59140,
+  name: 'Linea Goerli',
+  nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+  rpcUrls: { default: { http: ['https://rpc.goerli.linea.build'] } },
+  blockExplorers: { default: { name: 'LineaScan Goerli', url: 'https://goerli.lineascan.build' } },
+  testnet: true,
+});
+
 /**
  * Chain ID to viem chain mapping (EVM chains only)
  */
@@ -89,6 +112,10 @@ const viemChains: Record<number, Chain> = {
   137: polygon,
   1329: sei,
   196: xlayer,
+  42161: arbitrum,
+  10: optimism,
+  56: bsc,
+  59144: linea,
   // Testnets
   43113: avalancheFuji,
   84532: baseSepolia,
@@ -96,6 +123,10 @@ const viemChains: Record<number, Chain> = {
   1328: seiTestnet,
   11155111: sepolia,
   195: xlayerTestnet,
+  421614: arbitrumSepolia,
+  11155420: optimismSepolia,
+  97: bscTestnet,
+  59140: lineaGoerli,
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -448,6 +479,7 @@ export class Facilitator {
           },
           signature: signature as Hex,
           facilitatorPrivateKey: privateKey as Hex,
+          nonceValidator: this.config.nonceValidator, // Inject persistent nonce validator
         });
 
         if (result.success) {

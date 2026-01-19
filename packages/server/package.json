@@ -20,7 +20,8 @@
     "lint": "tsc --noEmit",
     "seed": "tsx scripts/seed-transactions.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "of:doctor": "tsx scripts/doctor.ts"
   },
   "dependencies": {
     "@openfacilitator/core": "workspace:*",

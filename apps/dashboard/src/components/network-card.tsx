@@ -92,6 +92,38 @@ export const SUPPORTED_NETWORKS: NetworkConfig[] = [
     chainId: 196,
     testnet: false,
   },
+  {
+    v1Id: 'arbitrum',
+    v2Id: 'eip155:42161',
+    name: 'Arbitrum',
+    type: 'evm',
+    chainId: 42161,
+    testnet: false,
+  },
+  {
+    v1Id: 'optimism',
+    v2Id: 'eip155:10',
+    name: 'Optimism',
+    type: 'evm',
+    chainId: 10,
+    testnet: false,
+  },
+  {
+    v1Id: 'bnb',
+    v2Id: 'eip155:56',
+    name: 'BNB Chain',
+    type: 'evm',
+    chainId: 56,
+    testnet: false,
+  },
+  {
+    v1Id: 'linea',
+    v2Id: 'eip155:59144',
+    name: 'Linea',
+    type: 'evm',
+    chainId: 59144,
+    testnet: false,
+  },
 
   // ============ EVM Testnets ============
   {
@@ -134,6 +166,38 @@ export const SUPPORTED_NETWORKS: NetworkConfig[] = [
     chainId: 195,
     testnet: true,
   },
+  {
+    v1Id: 'arbitrum-sepolia',
+    v2Id: 'eip155:421614',
+    name: 'Arbitrum Sepolia',
+    type: 'evm',
+    chainId: 421614,
+    testnet: true,
+  },
+  {
+    v1Id: 'optimism-sepolia',
+    v2Id: 'eip155:11155420',
+    name: 'Optimism Sepolia',
+    type: 'evm',
+    chainId: 11155420,
+    testnet: true,
+  },
+  {
+    v1Id: 'bnb-testnet',
+    v2Id: 'eip155:97',
+    name: 'BNB Chain Testnet',
+    type: 'evm',
+    chainId: 97,
+    testnet: true,
+  },
+  {
+    v1Id: 'linea-goerli',
+    v2Id: 'eip155:59140',
+    name: 'Linea Goerli',
+    type: 'evm',
+    chainId: 59140,
+    testnet: true,
+  },
 
   // ============ Solana ============
   {
@@ -168,12 +232,20 @@ const EXPLORER_URLS: Record<string, string> = {
   iotex: 'https://iotexscan.io',
   peaq: 'https://peaq.subscan.io',
   xlayer: 'https://www.okx.com/explorer/xlayer',
+  arbitrum: 'https://arbiscan.io',
+  optimism: 'https://optimistic.etherscan.io',
+  bnb: 'https://bscscan.com',
+  linea: 'https://lineascan.build',
   // EVM Testnets
   'base-sepolia': 'https://sepolia.basescan.org',
   'polygon-amoy': 'https://amoy.polygonscan.com',
   'avalanche-fuji': 'https://testnet.snowtrace.io',
   'sei-testnet': 'https://testnet.seitrace.com',
   'xlayer-testnet': 'https://www.okx.com/explorer/xlayer-test',
+  'arbitrum-sepolia': 'https://sepolia.arbiscan.io',
+  'optimism-sepolia': 'https://sepolia-optimism.etherscan.io',
+  'bnb-testnet': 'https://testnet.bscscan.com',
+  'linea-goerli': 'https://goerli.lineascan.build',
   // Solana
   solana: 'https://solscan.io',
   'solana-devnet': 'https://solscan.io',
