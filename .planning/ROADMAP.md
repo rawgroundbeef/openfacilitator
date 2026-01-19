@@ -12,7 +12,7 @@ This roadmap delivers a token rewards program where users earn $OPEN tokens for 
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Database Foundation** - Schema for rewards tables, address tracking, campaigns, claims
+- [x] **Phase 1: Database Foundation** - Schema for rewards tables, address tracking, campaigns, claims
 - [ ] **Phase 2: Auth Integration** - Link rewards accounts to Better Auth, admin identification
 - [ ] **Phase 3: Solana Address Management** - Add and verify Solana pay-to addresses
 - [ ] **Phase 4: EVM Address Management** - Add and verify EVM pay-to addresses
@@ -37,7 +37,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 1 plan
 
 Plans:
-- [ ] 01-01-PLAN.md - Database schema and CRUD modules for rewards tables
+- [x] 01-01-PLAN.md - Database schema and CRUD modules for rewards tables
 
 ### Phase 2: Auth Integration
 **Goal**: Users can access rewards features through existing Better Auth accounts
@@ -196,7 +196,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Database Foundation | 0/1 | Planned | - |
+| 1. Database Foundation | 1/1 | Complete | 2026-01-19 |
 | 2. Auth Integration | 0/2 | Not started | - |
 | 3. Solana Address Management | 0/1 | Not started | - |
 | 4. EVM Address Management | 0/1 | Not started | - |
