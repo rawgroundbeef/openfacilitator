@@ -8,6 +8,7 @@ import {
   getRewardAddressByAddress,
   getRewardAddressById,
   verifyRewardAddress,
+  deleteRewardAddress,
   isUserEnrolledInRewards,
 } from '../db/reward-addresses.js';
 import { isFacilitatorOwner } from '../db/facilitators.js';
@@ -155,6 +156,54 @@ router.post('/enroll', requireAuth, async (req: Request, res: Response) => {
     res.status(500).json({
       error: 'Internal server error',
       message: 'Failed to enroll address',
+    });
+  }
+});
+
+/**
+ * DELETE /addresses/:id
+ * Remove a reward address from user's account
+ */
+router.delete('/addresses/:id', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const addressId = req.params.id;
+
+    // Verify ownership - get address and check user_id matches
+    const address = getRewardAddressById(addressId);
+
+    if (!address) {
+      res.status(404).json({
+        error: 'Not found',
+        message: 'Address not found',
+      });
+      return;
+    }
+
+    if (address.user_id !== userId) {
+      res.status(403).json({
+        error: 'Forbidden',
+        message: 'You can only remove your own addresses',
+      });
+      return;
+    }
+
+    const deleted = deleteRewardAddress(addressId);
+
+    if (!deleted) {
+      res.status(500).json({
+        error: 'Internal server error',
+        message: 'Failed to delete address',
+      });
+      return;
+    }
+
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting reward address:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: 'Failed to delete address',
     });
   }
 });

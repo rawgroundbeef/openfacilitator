@@ -1134,6 +1134,12 @@ class ApiClient {
 
     return response.json();
   }
+
+  async deleteRewardAddress(addressId: string): Promise<void> {
+    return this.request(`/api/rewards/addresses/${addressId}`, {
+      method: 'DELETE',
+    });
+  }
 }
 
 export const api = new ApiClient(API_BASE);
