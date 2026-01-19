@@ -44,11 +44,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { api, type PaymentLink, type Facilitator, type Webhook, type LinkType } from '@/lib/api';
+import { api, type Product, type Facilitator, type Webhook, type LinkType } from '@/lib/api';
 import { formatAddress } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 
-interface PaymentLinksSectionProps {
+interface ProductsSectionProps {
   facilitatorId: string;
   facilitator: Facilitator;
 }
@@ -79,13 +79,13 @@ function parseAmountToAtomic(amount: string, decimals: number = 6): string {
   return Math.floor(num * Math.pow(10, decimals)).toString();
 }
 
-export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinksSectionProps) {
+export function ProductsSection({ facilitatorId, facilitator }: ProductsSectionProps) {
   const queryClient = useQueryClient();
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isApiOpen, setIsApiOpen] = useState(false);
-  const [editingLink, setEditingLink] = useState<PaymentLink | null>(null);
-  const [apiLink, setApiLink] = useState<PaymentLink | null>(null);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [apiProduct, setApiProduct] = useState<Product | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
@@ -102,12 +102,13 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
   const [method, setMethod] = useState<'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'ANY'>('GET');
   const [headersForward, setHeadersForward] = useState('');
   const [accessTtl, setAccessTtl] = useState(0); // 0 = pay per visit
+  const [groupName, setGroupName] = useState('');
   const [selectedWebhookId, setSelectedWebhookId] = useState<string | null>(null);
   const [imageUrl, setImageUrl] = useState('');
 
   const { data, isLoading } = useQuery({
-    queryKey: ['payment-links', facilitatorId],
-    queryFn: () => api.getPaymentLinks(facilitatorId),
+    queryKey: ['products', facilitatorId],
+    queryFn: () => api.getProducts(facilitatorId),
   });
 
   const { data: webhooksData } = useQuery({
@@ -117,7 +118,7 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
 
   const createMutation = useMutation({
     mutationFn: () =>
-      api.createPaymentLink(facilitatorId, {
+      api.createProduct(facilitatorId, {
         name,
         description: description || undefined,
         slug: slug || undefined,
@@ -130,30 +131,31 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
         method: linkType === 'proxy' ? method : undefined,
         headersForward: linkType === 'proxy' && headersForward ? headersForward.split(',').map(h => h.trim()).filter(Boolean) : undefined,
         accessTtl,
+        groupName: groupName || undefined,
         webhookId: selectedWebhookId || undefined,
         imageUrl: imageUrl || undefined,
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['payment-links', facilitatorId] });
+      queryClient.invalidateQueries({ queryKey: ['products', facilitatorId] });
       setIsCreateOpen(false);
       resetForm();
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: (data: { linkId: string; updates: Parameters<typeof api.updatePaymentLink>[2] }) =>
-      api.updatePaymentLink(facilitatorId, data.linkId, data.updates),
+    mutationFn: (data: { productId: string; updates: Parameters<typeof api.updateProduct>[2] }) =>
+      api.updateProduct(facilitatorId, data.productId, data.updates),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['payment-links', facilitatorId] });
+      queryClient.invalidateQueries({ queryKey: ['products', facilitatorId] });
       setIsEditOpen(false);
-      setEditingLink(null);
+      setEditingProduct(null);
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (linkId: string) => api.deletePaymentLink(facilitatorId, linkId),
+    mutationFn: (productId: string) => api.deleteProduct(facilitatorId, productId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['payment-links', facilitatorId] });
+      queryClient.invalidateQueries({ queryKey: ['products', facilitatorId] });
     },
   });
 
@@ -170,6 +172,7 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
     setMethod('GET');
     setHeadersForward('');
     setAccessTtl(0);
+    setGroupName('');
     setSelectedWebhookId(null);
     setImageUrl('');
   };
@@ -182,14 +185,14 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
     }
   };
 
-  const copyUrl = (link: PaymentLink) => {
-    navigator.clipboard.writeText(link.url);
-    setCopiedId(link.id);
+  const copyUrl = (product: Product) => {
+    navigator.clipboard.writeText(product.url);
+    setCopiedId(product.id);
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const openApiDialog = (link: PaymentLink) => {
-    setApiLink(link);
+  const openApiDialog = (product: Product) => {
+    setApiProduct(product);
     setIsApiOpen(true);
   };
 
@@ -199,29 +202,30 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
     setTimeout(() => setCopiedCode(null), 2000);
   };
 
-  const openEditDialog = (link: PaymentLink) => {
-    setEditingLink(link);
-    setName(link.name);
-    setDescription(link.description || '');
-    setSlug(link.slug || '');
-    setLinkType(link.linkType || 'payment');
-    setAmount(formatAmount(link.amount));
-    setNetwork(link.network);
-    setAsset(link.asset);
-    setPayToAddress(link.payToAddress);
-    setSuccessRedirectUrl(link.successRedirectUrl || '');
-    setMethod(link.method as typeof method || 'GET');
-    setHeadersForward(link.headersForward?.join(', ') || '');
-    setAccessTtl(link.accessTtl || 0);
-    setSelectedWebhookId(link.webhookId);
-    setImageUrl(link.imageUrl || '');
+  const openEditDialog = (product: Product) => {
+    setEditingProduct(product);
+    setName(product.name);
+    setDescription(product.description || '');
+    setSlug(product.slug || '');
+    setLinkType(product.linkType || 'payment');
+    setAmount(formatAmount(product.amount));
+    setNetwork(product.network);
+    setAsset(product.asset);
+    setPayToAddress(product.payToAddress);
+    setSuccessRedirectUrl(product.successRedirectUrl || '');
+    setMethod(product.method as typeof method || 'GET');
+    setHeadersForward(product.headersForward?.join(', ') || '');
+    setAccessTtl(product.accessTtl || 0);
+    setGroupName(product.groupName || '');
+    setSelectedWebhookId(product.webhookId);
+    setImageUrl(product.imageUrl || '');
     setIsEditOpen(true);
   };
 
-  const handleUpdateLink = () => {
-    if (!editingLink) return;
+  const handleUpdateProduct = () => {
+    if (!editingProduct) return;
     updateMutation.mutate({
-      linkId: editingLink.id,
+      productId: editingProduct.id,
       updates: {
         name,
         description: description || null,
@@ -235,16 +239,17 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
         method: linkType === 'proxy' ? method : undefined,
         headersForward: linkType === 'proxy' && headersForward ? headersForward.split(',').map(h => h.trim()).filter(Boolean) : undefined,
         accessTtl,
+        groupName: groupName || null,
         webhookId: selectedWebhookId,
         imageUrl: imageUrl || null,
       },
     });
   };
 
-  const toggleActive = (link: PaymentLink) => {
+  const toggleActive = (product: Product) => {
     updateMutation.mutate({
-      linkId: link.id,
-      updates: { active: !link.active },
+      productId: product.id,
+      updates: { active: !product.active },
     });
   };
 
@@ -261,7 +266,7 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Link2 className="w-4 h-4" />
-            Payment Links
+            Products
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -280,24 +285,24 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
           <div>
             <CardTitle className="flex items-center gap-2">
               <Link2 className="w-4 h-4" />
-              Links
+              Products
             </CardTitle>
             <CardDescription>
-              Payment links for anything. Turn any URL into a paid URL. Works for websites, APIs, files, anything with a URL.
+              x402 products for anything. Turn any URL into a paid resource. Works for websites, APIs, files, anything with a URL.
             </CardDescription>
           </div>
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
               <Button size="sm">
                 <Plus className="w-4 h-4 mr-2" />
-                Create Link
+                Create Product
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-lg">
               <DialogHeader>
-                <DialogTitle>Create Link</DialogTitle>
+                <DialogTitle>Create Product</DialogTitle>
                 <DialogDescription>
-                  Create a payment link, redirect, or API proxy.
+                  Create a payment page, redirect, or API proxy.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
@@ -353,18 +358,62 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
                     />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="imageUrl">Image URL (optional)</Label>
-                  <Input
-                    id="imageUrl"
-                    type="url"
-                    placeholder="https://example.com/product-image.jpg"
-                    value={imageUrl}
-                    onChange={(e) => setImageUrl(e.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Product image for storefront display
-                  </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Product Image (optional)</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id="imageUrl"
+                        type="url"
+                        placeholder="https://... or upload"
+                        value={imageUrl.startsWith('data:') ? '' : imageUrl}
+                        onChange={(e) => setImageUrl(e.target.value)}
+                        className="flex-1"
+                      />
+                      <label className="inline-flex items-center justify-center px-3 py-2 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground cursor-pointer text-sm">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file && file.size < 500000) {
+                              const reader = new FileReader();
+                              reader.onloadend = () => setImageUrl(reader.result as string);
+                              reader.readAsDataURL(file);
+                            } else if (file) {
+                              alert('Image must be under 500KB');
+                            }
+                          }}
+                        />
+                        Upload
+                      </label>
+                    </div>
+                    {imageUrl && (
+                      <div className="relative w-16 h-16 rounded border overflow-hidden">
+                        <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setImageUrl('')}
+                          className="absolute top-0 right-0 bg-black/50 text-white w-4 h-4 flex items-center justify-center text-xs rounded-bl"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="groupName">Group Name (optional)</Label>
+                    <Input
+                      id="groupName"
+                      placeholder="mountain-art"
+                      value={groupName}
+                      onChange={(e) => setGroupName(e.target.value)}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Group variants together (e.g., sizes)
+                    </p>
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -528,7 +577,7 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
                       Creating...
                     </>
                   ) : (
-                    'Create Link'
+                    'Create Product'
                   )}
                 </Button>
               </DialogFooter>
@@ -537,43 +586,46 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
         </div>
       </CardHeader>
       <CardContent>
-        {data?.links.length === 0 ? (
+        {data?.products.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <Link2 className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p>No payment links yet</p>
-            <p className="text-sm">Create your first link to start collecting payments</p>
+            <p>No products yet</p>
+            <p className="text-sm">Create your first product to start collecting payments</p>
           </div>
         ) : (
           <div className="space-y-3">
-            {data?.links.map((link) => (
+            {data?.products.map((product) => (
               <div
-                key={link.id}
+                key={product.id}
                 className={`flex items-center justify-between p-4 rounded-lg border ${
-                  link.active ? 'bg-background' : 'bg-muted/30 opacity-60'
+                  product.active ? 'bg-background' : 'bg-muted/30 opacity-60'
                 }`}
               >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium truncate">{link.name}</span>
+                    <span className="font-medium truncate">{product.name}</span>
                     <Badge variant={
-                      link.linkType === 'payment' ? 'default' :
-                      link.linkType === 'redirect' ? 'secondary' : 'outline'
+                      product.linkType === 'payment' ? 'default' :
+                      product.linkType === 'redirect' ? 'secondary' : 'outline'
                     } className="text-xs py-0">
-                      {link.linkType || 'payment'}
+                      {product.linkType || 'payment'}
                     </Badge>
-                    {!link.active && (
+                    {!product.active && (
                       <span className="text-xs bg-muted px-2 py-0.5 rounded">Inactive</span>
                     )}
                   </div>
                   <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
                     <span className="font-mono">
-                      ${formatAmount(link.amount)} {getTokenSymbol(link.network, link.asset)}
+                      ${formatAmount(product.amount)} {getTokenSymbol(product.network, product.asset)}
                     </span>
-                    <span className="capitalize">{link.network}</span>
-                    {link.slug && <span className="font-mono text-xs">/{link.slug}</span>}
-                    {link.stats && (
+                    <span className="capitalize">{product.network}</span>
+                    {product.slug && <span className="font-mono text-xs">/{product.slug}</span>}
+                    {product.groupName && (
+                      <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">{product.groupName}</span>
+                    )}
+                    {product.stats && (
                       <span>
-                        {link.stats.successfulPayments} payment{link.stats.successfulPayments !== 1 ? 's' : ''}
+                        {product.stats.successfulPayments} payment{product.stats.successfulPayments !== 1 ? 's' : ''}
                       </span>
                     )}
                   </div>
@@ -582,17 +634,17 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => copyUrl(link)}
+                    onClick={() => copyUrl(product)}
                     className="h-8 px-2"
                   >
-                    {copiedId === link.id ? (
+                    {copiedId === product.id ? (
                       <Check className="w-4 h-4 text-green-500" />
                     ) : (
                       <Copy className="w-4 h-4" />
                     )}
                   </Button>
                   <a
-                    href={link.url}
+                    href={product.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent"
@@ -606,16 +658,16 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => openApiDialog(link)}>
+                      <DropdownMenuItem onClick={() => openApiDialog(product)}>
                         <Code className="w-4 h-4 mr-2" />
                         API / x402
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => openEditDialog(link)}>
+                      <DropdownMenuItem onClick={() => openEditDialog(product)}>
                         <Pencil className="w-4 h-4 mr-2" />
                         Edit
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => toggleActive(link)}>
-                        {link.active ? (
+                      <DropdownMenuItem onClick={() => toggleActive(product)}>
+                        {product.active ? (
                           <>
                             <ToggleLeft className="w-4 h-4 mr-2" />
                             Deactivate
@@ -630,8 +682,8 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
                       <DropdownMenuItem
                         className="text-red-600"
                         onClick={() => {
-                          if (confirm(`Delete "${link.name}"? This cannot be undone.`)) {
-                            deleteMutation.mutate(link.id);
+                          if (confirm(`Delete "${product.name}"? This cannot be undone.`)) {
+                            deleteMutation.mutate(product.id);
                           }
                         }}
                       >
@@ -647,10 +699,10 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
         )}
 
         {/* Stats summary */}
-        {data?.stats && data.stats.totalLinks > 0 && (
+        {data?.stats && data.stats.totalProducts > 0 && (
           <div className="mt-4 pt-4 border-t flex items-center gap-6 text-sm text-muted-foreground">
             <div>
-              <span className="font-medium text-foreground">{data.stats.activeLinks}</span> active links
+              <span className="font-medium text-foreground">{data.stats.activeProducts}</span> active products
             </div>
             <div>
               <span className="font-medium text-foreground">{data.stats.totalPayments}</span> total payments
@@ -665,13 +717,13 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
       {/* Edit Dialog */}
       <Dialog open={isEditOpen} onOpenChange={(open) => {
         setIsEditOpen(open);
-        if (!open) setEditingLink(null);
+        if (!open) setEditingProduct(null);
       }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Edit Payment Link</DialogTitle>
+            <DialogTitle>Edit Product</DialogTitle>
             <DialogDescription>
-              Update your payment link settings.
+              Update your product settings.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -692,18 +744,62 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
                 rows={2}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="edit-imageUrl">Image URL (optional)</Label>
-              <Input
-                id="edit-imageUrl"
-                type="url"
-                placeholder="https://example.com/product-image.jpg"
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Product image for storefront display
-              </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Product Image (optional)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="edit-imageUrl"
+                    type="url"
+                    placeholder="https://... or upload"
+                    value={imageUrl.startsWith('data:') ? '' : imageUrl}
+                    onChange={(e) => setImageUrl(e.target.value)}
+                    className="flex-1"
+                  />
+                  <label className="inline-flex items-center justify-center px-3 py-2 rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground cursor-pointer text-sm">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file && file.size < 500000) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => setImageUrl(reader.result as string);
+                          reader.readAsDataURL(file);
+                        } else if (file) {
+                          alert('Image must be under 500KB');
+                        }
+                      }}
+                    />
+                    Upload
+                  </label>
+                </div>
+                {imageUrl && (
+                  <div className="relative w-16 h-16 rounded border overflow-hidden">
+                    <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setImageUrl('')}
+                      className="absolute top-0 right-0 bg-black/50 text-white w-4 h-4 flex items-center justify-center text-xs rounded-bl"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-groupName">Group Name (optional)</Label>
+                <Input
+                  id="edit-groupName"
+                  placeholder="mountain-art"
+                  value={groupName}
+                  onChange={(e) => setGroupName(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Group variants together (e.g., sizes)
+                </p>
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -814,7 +910,7 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
               Cancel
             </Button>
             <Button
-              onClick={handleUpdateLink}
+              onClick={handleUpdateProduct}
               disabled={!name || !amount || !payToAddress || ((linkType === 'redirect' || linkType === 'proxy') && !successRedirectUrl) || updateMutation.isPending}
             >
               {updateMutation.isPending ? (
@@ -833,7 +929,7 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
       {/* API / x402 Dialog */}
       <Dialog open={isApiOpen} onOpenChange={(open) => {
         setIsApiOpen(open);
-        if (!open) setApiLink(null);
+        if (!open) setApiProduct(null);
       }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -842,10 +938,10 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
               API Access
             </DialogTitle>
             <DialogDescription>
-              Access this payment link programmatically via the x402 protocol.
+              Access this product programmatically via the x402 protocol.
             </DialogDescription>
           </DialogHeader>
-          {apiLink && (
+          {apiProduct && (
             <div className="space-y-6 py-4">
               {/* Human-friendly URL */}
               <div className="space-y-2">
@@ -855,12 +951,12 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
                 </Label>
                 <div className="flex gap-2">
                   <code className="flex-1 px-3 py-2 bg-muted rounded-md text-sm font-mono break-all">
-                    {apiLink.url}
+                    {apiProduct.url}
                   </code>
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => copyCode(apiLink.url, 'human-url')}
+                    onClick={() => copyCode(apiProduct.url, 'human-url')}
                   >
                     {copiedCode === 'human-url' ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                   </Button>
@@ -886,14 +982,14 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
                   <div className="text-xs text-muted-foreground font-medium">Get payment requirements:</div>
                   <div className="relative">
                     <pre className="px-3 py-2 bg-zinc-900 text-zinc-100 rounded-md text-xs font-mono overflow-x-auto">
-{`curl -X GET "${apiLink.url}" \\
+{`curl -X GET "${apiProduct.url}" \\
   -H "Accept: application/json"`}
                     </pre>
                     <Button
                       variant="ghost"
                       size="sm"
                       className="absolute top-1 right-1 h-6 w-6 p-0"
-                      onClick={() => copyCode(`curl -X GET "${apiLink.url}" -H "Accept: application/json"`, 'curl-get')}
+                      onClick={() => copyCode(`curl -X GET "${apiProduct.url}" -H "Accept: application/json"`, 'curl-get')}
                     >
                       {copiedCode === 'curl-get' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3 text-zinc-400" />}
                     </Button>
@@ -908,11 +1004,11 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
   "x402Version": 1,
   "accepts": [{
     "scheme": "exact",
-    "network": "${apiLink.network}",
-    "maxAmountRequired": "${apiLink.amount}",
-    "asset": "${apiLink.asset}",
-    "payTo": "${apiLink.payToAddress}",
-    "description": "${apiLink.description || apiLink.name}"
+    "network": "${apiProduct.network}",
+    "maxAmountRequired": "${apiProduct.amount}",
+    "asset": "${apiProduct.asset}",
+    "payTo": "${apiProduct.payToAddress}",
+    "description": "${apiProduct.description || apiProduct.name}"
   }],
   "error": "Payment Required"
 }`}
@@ -924,7 +1020,7 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
                   <div className="text-xs text-muted-foreground font-medium">Submit payment (with signed payload):</div>
                   <div className="relative">
                     <pre className="px-3 py-2 bg-zinc-900 text-zinc-100 rounded-md text-xs font-mono overflow-x-auto">
-{`curl -X GET "${apiLink.url}" \\
+{`curl -X GET "${apiProduct.url}" \\
   -H "Accept: application/json" \\
   -H "X-Payment: <base64-encoded-signed-payload>"`}
                     </pre>
@@ -932,7 +1028,7 @@ export function PaymentLinksSection({ facilitatorId, facilitator }: PaymentLinks
                       variant="ghost"
                       size="sm"
                       className="absolute top-1 right-1 h-6 w-6 p-0"
-                      onClick={() => copyCode(`curl -X GET "${apiLink.url}" -H "Accept: application/json" -H "X-Payment: <base64-encoded-signed-payload>"`, 'curl-pay')}
+                      onClick={() => copyCode(`curl -X GET "${apiProduct.url}" -H "Accept: application/json" -H "X-Payment: <base64-encoded-signed-payload>"`, 'curl-pay')}
                     >
                       {copiedCode === 'curl-pay' ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3 text-zinc-400" />}
                     </Button>

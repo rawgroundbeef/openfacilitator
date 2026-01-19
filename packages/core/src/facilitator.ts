@@ -248,7 +248,7 @@ export class Facilitator {
       const chainId = getChainIdFromNetwork(requirements.network);
       if (!chainId) {
         return {
-          valid: false,
+          isValid: false,
           invalidReason: `Unsupported network: ${requirements.network}`,
         };
       }
@@ -259,7 +259,7 @@ export class Facilitator {
       );
       if (!isSupported) {
         return {
-          valid: false,
+          isValid: false,
           invalidReason: `Chain ${chainId} not supported by this facilitator`,
         };
       }
@@ -270,14 +270,14 @@ export class Facilitator {
         const solanaPayload = payload.payload || payload;
         if (!solanaPayload.transaction) {
           return {
-            valid: false,
+            isValid: false,
             invalidReason: 'Missing transaction in Solana payment payload',
           };
         }
         // For Solana, we trust the pre-signed transaction
         // The actual verification happens during settlement
         return {
-          valid: true,
+          isValid: true,
           payer: 'solana-payer', // Payer is embedded in the transaction
         };
       }
@@ -287,7 +287,7 @@ export class Facilitator {
         const client = this.clients.get(chainId);
         if (!client) {
           return {
-            valid: false,
+            isValid: false,
             invalidReason: `No client configured for chain ${chainId}`,
           };
         }
@@ -302,7 +302,7 @@ export class Facilitator {
         
         if (!authorization) {
           return {
-            valid: false,
+            isValid: false,
             invalidReason: 'Missing authorization in EVM payment payload',
           };
         }
@@ -311,13 +311,13 @@ export class Facilitator {
         const now = Math.floor(Date.now() / 1000);
         if (authorization.validAfter > now) {
           return {
-            valid: false,
+            isValid: false,
             invalidReason: 'Payment not yet valid',
           };
         }
         if (authorization.validBefore < now) {
           return {
-            valid: false,
+            isValid: false,
             invalidReason: 'Payment has expired',
           };
         }
@@ -327,24 +327,24 @@ export class Facilitator {
         const requiredAmount = BigInt(requirements.maxAmountRequired);
         if (paymentAmount < requiredAmount) {
           return {
-            valid: false,
+            isValid: false,
             invalidReason: `Payment amount ${paymentAmount} is less than required ${requiredAmount}`,
           };
         }
 
         return {
-          valid: true,
+          isValid: true,
           payer: authorization.from,
         };
       }
 
       return {
-        valid: false,
+        isValid: false,
         invalidReason: `Unknown chain type: ${chainId}`,
       };
     } catch (error) {
       return {
-        valid: false,
+        isValid: false,
         invalidReason: error instanceof Error ? error.message : 'Unknown error during verification',
       };
     }
@@ -361,11 +361,13 @@ export class Facilitator {
     try {
       // First verify the payment
       const verification = await this.verify(paymentPayload, requirements);
-      if (!verification.valid) {
+      if (!verification.isValid) {
         return {
           success: false,
-          errorMessage: verification.invalidReason,
+          transaction: '',
+          payer: verification.payer || '',
           network: requirements.network,
+          errorReason: verification.invalidReason,
         };
       }
 
@@ -377,16 +379,20 @@ export class Facilitator {
       if (!chainId) {
         return {
           success: false,
-          errorMessage: `Unsupported network: ${requirements.network}`,
+          transaction: '',
+          payer: verification.payer || '',
           network: requirements.network,
+          errorReason: `Unsupported network: ${requirements.network}`,
         };
       }
 
       if (!privateKey) {
         return {
           success: false,
-          errorMessage: 'Private key required for settlement',
+          transaction: '',
+          payer: verification.payer || '',
           network: requirements.network,
+          errorReason: 'Private key required for settlement',
         };
       }
 
@@ -395,12 +401,14 @@ export class Facilitator {
         // Solana payload structure: { payload: { transaction: "...", signature: "..." } }
         const solanaPayload = payload.payload || payload;
         const signedTransaction = solanaPayload.transaction;
-        
+
         if (!signedTransaction) {
           return {
             success: false,
-            errorMessage: 'Missing transaction in Solana payment payload',
+            transaction: '',
+            payer: verification.payer || 'solana-payer',
             network: requirements.network,
+            errorReason: 'Missing transaction in Solana payment payload',
           };
         }
 
@@ -414,14 +422,17 @@ export class Facilitator {
         if (result.success) {
           return {
             success: true,
-            transactionHash: result.transactionHash,
+            transaction: result.transactionHash || '',
+            payer: verification.payer || 'solana-payer',
             network: requirements.network,
           };
         } else {
           return {
             success: false,
-            errorMessage: result.errorMessage,
+            transaction: '',
+            payer: verification.payer || 'solana-payer',
             network: requirements.network,
+            errorReason: result.errorMessage,
           };
         }
       }
@@ -433,19 +444,23 @@ export class Facilitator {
         // Format 2: { payload: { authorization: {...}, signature: "..." } }
         let authorization = (payload as X402PaymentPayload).authorization;
         let signature = (payload as X402PaymentPayload).signature;
-        
+
         if (!authorization && payload.payload) {
           authorization = payload.payload.authorization;
           signature = payload.payload.signature;
         }
-        
+
         if (!authorization) {
           return {
             success: false,
-            errorMessage: 'Missing authorization in EVM payment payload',
+            transaction: '',
+            payer: verification.payer || '',
             network: requirements.network,
+            errorReason: 'Missing authorization in EVM payment payload',
           };
         }
+
+        const payerAddress = authorization.from as string;
 
         // Debug logging for EVM authorization
         console.log('[Facilitator] EVM authorization received:', JSON.stringify(authorization, null, 2));
@@ -470,28 +485,35 @@ export class Facilitator {
         if (result.success) {
           return {
             success: true,
-            transactionHash: result.transactionHash,
+            transaction: result.transactionHash || '',
+            payer: payerAddress,
             network: requirements.network,
           };
         } else {
           return {
             success: false,
-            errorMessage: result.errorMessage,
+            transaction: '',
+            payer: payerAddress,
             network: requirements.network,
+            errorReason: result.errorMessage,
           };
         }
       }
 
       return {
         success: false,
-        errorMessage: `Unknown chain type: ${chainId}`,
+        transaction: '',
+        payer: verification.payer || '',
         network: requirements.network,
+        errorReason: `Unknown chain type: ${chainId}`,
       };
     } catch (error) {
       return {
         success: false,
-        errorMessage: error instanceof Error ? error.message : 'Unknown error during settlement',
+        transaction: '',
+        payer: '',
         network: requirements.network,
+        errorReason: error instanceof Error ? error.message : 'Unknown error during settlement',
       };
     }
   }

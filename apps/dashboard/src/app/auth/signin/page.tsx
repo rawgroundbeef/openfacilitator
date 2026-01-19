@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Mail, Lock, ArrowRight, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,8 +10,10 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { signIn } from '@/lib/auth-client';
 
-export default function SignInPage() {
+function SignInContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -33,7 +35,8 @@ export default function SignInPage() {
         return;
       }
 
-      router.push('/dashboard');
+      // Redirect to callback URL or dashboard
+      router.push(callbackUrl);
     } catch (err) {
       setError('An unexpected error occurred');
     } finally {
@@ -117,7 +120,10 @@ export default function SignInPage() {
 
             <div className="mt-6 text-center text-sm text-muted-foreground">
               Don&apos;t have an account?{' '}
-              <Link href="/auth/signup" className="text-primary hover:underline font-medium">
+              <Link
+                href={`/auth/signup${callbackUrl !== '/dashboard' ? `?callbackUrl=${encodeURIComponent(callbackUrl)}` : ''}`}
+                className="text-primary hover:underline font-medium"
+              >
                 Sign up
               </Link>
             </div>
@@ -128,3 +134,14 @@ export default function SignInPage() {
   );
 }
 
+export default function SignInPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    }>
+      <SignInContent />
+    </Suspense>
+  );
+}

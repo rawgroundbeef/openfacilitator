@@ -99,10 +99,24 @@ export interface MultiSettleSettlementRecord {
 }
 
 /**
- * Payment link database record
- * Unified links - can be payment, redirect, or proxy type
+ * Required field definition for products
+ * Used for variants, shipping info, and other user-provided data
  */
-export interface PaymentLinkRecord {
+export interface RequiredFieldDefinition {
+  name: string;
+  type: 'text' | 'select' | 'address' | 'email' | 'number';
+  label?: string;              // Display label (defaults to name)
+  options?: string[];          // For select type
+  required?: boolean;          // Defaults to true
+  placeholder?: string;
+}
+
+/**
+ * Product database record
+ * x402 resources that can be purchased via payment page or API
+ * Types: payment (simple), redirect (after payment), proxy (API gateway)
+ */
+export interface ProductRecord {
   id: string;
   facilitator_id: string;
   name: string;
@@ -118,6 +132,8 @@ export interface PaymentLinkRecord {
   method: string;              // HTTP method for proxy type (GET, POST, etc.)
   headers_forward: string;     // JSON array of headers to forward for proxy type
   access_ttl: number;          // Seconds of access after payment (0 = pay per visit)
+  required_fields: string;     // JSON array of RequiredFieldDefinition
+  group_name: string | null;   // Group name for variant products (e.g., "mountain-art")
   webhook_id: string | null;   // Reference to webhooks table
   webhook_url: string | null;  // (deprecated, use webhook_id)
   webhook_secret: string | null; // (deprecated, use webhook_id)
@@ -127,19 +143,52 @@ export interface PaymentLinkRecord {
 }
 
 /**
- * Payment link payment database record
- * Tracks individual payments made via a payment link
+ * Product payment database record
+ * Tracks individual payments made for a product
  */
-export interface PaymentLinkPaymentRecord {
+export interface ProductPaymentRecord {
   id: string;
-  payment_link_id: string;
+  product_id: string;
   payer_address: string;
   amount: string;
   transaction_hash: string | null;
   status: 'pending' | 'success' | 'failed';
   error_message: string | null;
+  metadata: string;            // JSON object with submitted field values
   created_at: string;
 }
+
+/**
+ * Storefront database record
+ * A collection of products (catalog/store)
+ */
+export interface StorefrontRecord {
+  id: string;
+  facilitator_id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  image_url: string | null;
+  active: number;              // 0 = inactive, 1 = active
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Storefront-Product join record (many-to-many)
+ */
+export interface StorefrontProductRecord {
+  storefront_id: string;
+  product_id: string;
+  position: number;            // For ordering products in storefront
+  created_at: string;
+}
+
+// Backwards compatibility aliases (deprecated)
+/** @deprecated Use ProductRecord instead */
+export type PaymentLinkRecord = ProductRecord;
+/** @deprecated Use ProductPaymentRecord instead */
+export type PaymentLinkPaymentRecord = ProductPaymentRecord;
 
 /**
  * Webhook database record
@@ -156,5 +205,73 @@ export interface WebhookRecord {
   active: number;                // 0 = inactive, 1 = active
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * Refund configuration per facilitator (global enable/disable)
+ */
+export interface RefundConfigRecord {
+  id: string;
+  facilitator_id: string;
+  enabled: number;               // 0 = disabled, 1 = enabled
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Resource owner: third party who uses a facilitator and wants refund protection
+ */
+export interface ResourceOwnerRecord {
+  id: string;
+  facilitator_id: string;
+  user_id: string;
+  refund_address: string | null;
+  name: string | null;
+  created_at: string;
+}
+
+/**
+ * Refund wallet record (one per resource owner per network)
+ */
+export interface RefundWalletRecord {
+  id: string;
+  resource_owner_id: string;
+  network: string;               // e.g., 'base', 'solana'
+  wallet_address: string;
+  encrypted_private_key: string;
+  created_at: string;
+}
+
+/**
+ * API key for servers that can report failures (owned by resource owner)
+ */
+export interface RegisteredServerRecord {
+  id: string;
+  resource_owner_id: string;
+  url: string;                   // Server URL (empty string if not provided)
+  name: string | null;           // Label for identifying the key
+  api_key_hash: string;
+  active: number;                // 0 = revoked, 1 = active
+  created_at: string;
+}
+
+/**
+ * Claim for refund (scoped to resource owner)
+ */
+export interface ClaimRecord {
+  id: string;
+  resource_owner_id: string;
+  server_id: string | null;      // Null if API key was revoked
+  original_tx_hash: string;
+  user_wallet: string;
+  amount: string;
+  asset: string;
+  network: string;
+  reason: string | null;
+  status: 'pending' | 'approved' | 'paid' | 'rejected' | 'expired';
+  payout_tx_hash: string | null;
+  reported_at: string;
+  paid_at: string | null;
+  expires_at: string | null;
 }
 

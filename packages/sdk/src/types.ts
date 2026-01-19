@@ -85,9 +85,11 @@ export interface PaymentRequirements {
 
 export interface VerifyResponse {
   /** Whether the payment is valid */
-  valid: boolean;
-  /** Error message if invalid */
-  error?: string;
+  isValid: boolean;
+  /** Reason if invalid (x402 standard) */
+  invalidReason?: string;
+  /** Payer address */
+  payer?: string;
   /** Additional verification details */
   details?: {
     /** Verified amount */
@@ -102,12 +104,14 @@ export interface VerifyResponse {
 export interface SettleResponse {
   /** Whether settlement was successful */
   success: boolean;
-  /** Transaction hash/signature */
-  transactionHash?: string;
+  /** Transaction hash/signature (empty string when failed, x402 standard) */
+  transaction: string;
+  /** Payer address (x402 standard) */
+  payer: string;
   /** Network the transaction was settled on */
-  network?: string;
-  /** Error message if failed */
-  errorMessage?: string;
+  network: string;
+  /** Error reason if failed (x402 standard) */
+  errorReason?: string;
 }
 
 export interface SupportedResponse {

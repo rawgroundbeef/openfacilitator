@@ -159,7 +159,7 @@ router.post('/subscription', async (req: Request, res: Response) => {
   // Parse webhook payload
   const { event, payment, metadata } = req.body;
 
-  if (event !== 'payment_link.payment') {
+  if (event !== 'payment_link.payment' && event !== 'product.payment') {
     // Not a payment event, ignore
     res.json({ success: true, message: 'Event ignored' });
     return;

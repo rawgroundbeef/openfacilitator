@@ -20,9 +20,10 @@ const result = await facilitator.settle(payment, requirements);
 ```typescript
 interface SettleResponse {
   success: boolean;
-  transactionHash?: string;
-  network?: string;
-  error?: string;
+  transaction: string;  // Empty string "" if failed
+  payer: string;
+  network: string;
+  errorReason?: string;
 }
 ```
 
@@ -32,10 +33,10 @@ interface SettleResponse {
 const result = await facilitator.settle(payment, requirements);
 
 if (result.success) {
-  console.log('Transaction hash:', result.transactionHash);
+  console.log('Transaction:', result.transaction);
   // e.g., 0x1234...5678
 } else {
-  console.error('Settlement failed:', result.error);
+  console.error('Settlement failed:', result.errorReason);
 }
 ```
 

@@ -202,3 +202,18 @@ export function isSubdomainAvailable(subdomain: string): boolean {
   return !stmt.get(subdomain.toLowerCase());
 }
 
+/**
+ * Get a facilitator by domain or subdomain (for backward compatibility)
+ * Tries custom domain first, then subdomain as fallback
+ */
+export function getFacilitatorByDomainOrSubdomain(identifier: string): FacilitatorRecord | null {
+  // First try as a domain (custom_domain or additional_domains)
+  const byDomain = getFacilitatorByCustomDomain(identifier);
+  if (byDomain) {
+    return byDomain;
+  }
+
+  // Fall back to subdomain lookup for backward compatibility
+  return getFacilitatorBySubdomain(identifier);
+}
+

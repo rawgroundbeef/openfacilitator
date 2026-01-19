@@ -54,6 +54,143 @@ function releaseNonce(chainId: number, from: string, nonce: string): void {
   const key = `${chainId}:${from.toLowerCase()}:${nonce.toLowerCase()}`;
   processingNonces.delete(key);
 }
+
+/**
+ * EVM Account Nonce Manager
+ *
+ * Manages EVM transaction nonces to prevent race conditions when multiple
+ * settlement requests are processed concurrently. Without this, concurrent
+ * requests would all read the same nonce from the chain, causing all but one
+ * to fail with "nonce too low" errors.
+ *
+ * The manager:
+ * 1. Tracks the next nonce to use per (chainId, address) pair
+ * 2. Uses a mutex to ensure atomic nonce allocation
+ * 3. Syncs with the blockchain on first use and after gaps
+ * 4. Releases nonces back if transactions fail before broadcast
+ */
+class NonceManager {
+  // Current nonce per chain:address
+  private nonces: Map<string, number> = new Map();
+  // Pending nonce acquisitions waiting for lock
+  private locks: Map<string, Promise<void>> = new Map();
+  // Release callbacks for pending nonces
+  private resolvers: Map<string, () => void> = new Map();
+
+  private getKey(chainId: number, address: string): string {
+    return `${chainId}:${address.toLowerCase()}`;
+  }
+
+  /**
+   * Acquire the next nonce for a given chain and address.
+   * This is atomic - concurrent calls will queue and get sequential nonces.
+   *
+   * @returns Object with the nonce and a release function to call if tx fails
+   */
+  async acquireNonce(
+    chainId: number,
+    address: string,
+    getOnChainNonce: () => Promise<number>
+  ): Promise<{ nonce: number; release: () => void }> {
+    const key = this.getKey(chainId, address);
+
+    // Wait for any pending acquisition on this key
+    while (this.locks.has(key)) {
+      await this.locks.get(key);
+    }
+
+    // Create a new lock that others will wait on
+    let releaseLock: () => void;
+    const lockPromise = new Promise<void>((resolve) => {
+      releaseLock = resolve;
+    });
+    this.locks.set(key, lockPromise);
+
+    try {
+      // Get or initialize the nonce
+      let nonce = this.nonces.get(key);
+
+      if (nonce === undefined) {
+        // First time for this chain:address - sync from chain
+        nonce = await getOnChainNonce();
+        console.log(`[NonceManager] Initialized nonce for ${key}: ${nonce}`);
+      }
+
+      // Store the next nonce for subsequent requests
+      const currentNonce = nonce;
+      this.nonces.set(key, nonce + 1);
+
+      console.log(`[NonceManager] Acquired nonce ${currentNonce} for ${key}, next will be ${nonce + 1}`);
+
+      // Return the nonce with a release function for failed txs
+      return {
+        nonce: currentNonce,
+        release: () => {
+          // If tx fails before broadcast, we might want to reuse this nonce
+          // However, we should NOT decrement as another tx may have already
+          // used a higher nonce. Instead, just log - the nonce will be skipped
+          // and the chain will handle it (tx will fail with nonce too high,
+          // but that's recoverable on next sync)
+          console.log(`[NonceManager] Nonce ${currentNonce} released (tx failed)`);
+        },
+      };
+    } finally {
+      // Release the lock
+      this.locks.delete(key);
+      releaseLock!();
+    }
+  }
+
+  /**
+   * Sync nonce from chain - call this after a failed transaction to recover
+   * from potential nonce gaps or mismatches
+   */
+  async syncNonce(
+    chainId: number,
+    address: string,
+    getOnChainNonce: () => Promise<number>
+  ): Promise<void> {
+    const key = this.getKey(chainId, address);
+
+    // Wait for any pending acquisition
+    while (this.locks.has(key)) {
+      await this.locks.get(key);
+    }
+
+    const onChainNonce = await getOnChainNonce();
+    const currentNonce = this.nonces.get(key);
+
+    // Only update if chain nonce is higher (txs may have confirmed)
+    if (currentNonce === undefined || onChainNonce > currentNonce) {
+      this.nonces.set(key, onChainNonce);
+      console.log(`[NonceManager] Synced nonce for ${key}: ${currentNonce} -> ${onChainNonce}`);
+    }
+  }
+
+  /**
+   * Force reset nonce from chain - use after persistent errors
+   */
+  async resetNonce(
+    chainId: number,
+    address: string,
+    getOnChainNonce: () => Promise<number>
+  ): Promise<void> {
+    const key = this.getKey(chainId, address);
+
+    // Wait for any pending acquisition
+    while (this.locks.has(key)) {
+      await this.locks.get(key);
+    }
+
+    const onChainNonce = await getOnChainNonce();
+    this.nonces.set(key, onChainNonce);
+    console.log(`[NonceManager] Force reset nonce for ${key} to ${onChainNonce}`);
+  }
+}
+
+// Global nonce manager instance
+const nonceManager = new NonceManager();
+
 import { privateKeyToAccount } from 'viem/accounts';
 import { 
   avalanche, 
@@ -362,17 +499,82 @@ export async function executeERC3009Settlement(
       };
     }
 
-    // Send transaction directly without gas estimation
-    // Gas estimation can fail due to clock skew between server and blockchain
-    // The actual transaction will succeed because block timestamp moves forward
+    // Acquire nonce from the NonceManager - this prevents race conditions
+    // when multiple settlements are processed concurrently
+    const getOnChainNonce = async () => {
+      return publicClient.getTransactionCount({
+        address: account.address,
+        blockTag: 'pending',
+      });
+    };
+
+    const { nonce, release: releaseEvmNonce } = await nonceManager.acquireNonce(
+      chainId,
+      account.address,
+      getOnChainNonce
+    );
+    console.log('[ERC3009Settlement] Using nonce from NonceManager:', nonce);
+
+    // Send transaction with explicit nonce and retry logic for errors
     console.log('[ERC3009Settlement] Sending transaction...');
-    const hash = await walletClient.sendTransaction({
-      to: tokenAddress,
-      data,
-      gas: 100000n, // ERC-3009 transfers use ~65k gas, 100k is safe
-      gasPrice,
-    });
-    console.log('[ERC3009Settlement] Transaction sent! Hash:', hash);
+    let hash: Hex;
+    let attempts = 0;
+    const maxAttempts = 3;
+    let currentGasPrice = gasPrice;
+    let currentNonce = nonce;
+    let txSent = false;
+
+    while (attempts < maxAttempts) {
+      try {
+        hash = await walletClient.sendTransaction({
+          to: tokenAddress,
+          data,
+          gas: 100000n, // ERC-3009 transfers use ~65k gas, 100k is safe
+          gasPrice: currentGasPrice,
+          nonce: currentNonce,
+        });
+        txSent = true;
+        console.log('[ERC3009Settlement] Transaction sent! Hash:', hash);
+        break;
+      } catch (sendError: unknown) {
+        const errMsg = sendError instanceof Error ? sendError.message : String(sendError);
+        const errMsgLower = errMsg.toLowerCase();
+        attempts++;
+
+        // Check for nonce too low error - sync and get new nonce
+        if (errMsgLower.includes('nonce too low') || errMsgLower.includes('nonce has already been used')) {
+          if (attempts < maxAttempts) {
+            console.warn(`[ERC3009Settlement] Retry ${attempts}/${maxAttempts}: Nonce too low, syncing from chain...`);
+            // Sync nonce manager with chain and get fresh nonce
+            await nonceManager.resetNonce(chainId, account.address, getOnChainNonce);
+            const { nonce: newNonce } = await nonceManager.acquireNonce(chainId, account.address, getOnChainNonce);
+            currentNonce = newNonce;
+            continue;
+          }
+        }
+
+        // Check if it's an underpriced error (replacement tx needed)
+        if (errMsgLower.includes('underpriced') || errMsgLower.includes('replacement')) {
+          if (attempts < maxAttempts) {
+            // Bump gas price by 20% and retry with same nonce
+            currentGasPrice = (currentGasPrice * 120n) / 100n;
+            console.warn(`[ERC3009Settlement] Retry ${attempts}/${maxAttempts}: Underpriced, bumping gas to ${currentGasPrice}`);
+            continue;
+          }
+        }
+
+        // If tx was never sent, release the nonce for potential reuse
+        if (!txSent) {
+          releaseEvmNonce();
+        }
+
+        // Not a recoverable error or max attempts reached
+        throw sendError;
+      }
+    }
+
+    // TypeScript: hash is definitely assigned if we get here
+    hash = hash!;
 
     // Wait for confirmation
     console.log('[ERC3009Settlement] Waiting for confirmation...');

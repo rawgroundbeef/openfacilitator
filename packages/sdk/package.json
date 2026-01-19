@@ -1,6 +1,6 @@
 {
   "name": "@openfacilitator/sdk",
-  "version": "0.2.0",
+  "version": "0.6.3",
   "description": "TypeScript SDK for x402 payment facilitation",
   "main": "dist/index.js",
   "module": "dist/index.mjs",

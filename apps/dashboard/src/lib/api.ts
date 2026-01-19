@@ -185,15 +185,17 @@ export interface ProxyUrlsResponse {
   urls: ProxyUrl[];
 }
 
-export type LinkType = 'payment' | 'redirect' | 'proxy';
+export type ProductType = 'payment' | 'redirect' | 'proxy';
+/** @deprecated Use ProductType instead */
+export type LinkType = ProductType;
 
-export interface PaymentLink {
+export interface Product {
   id: string;
   name: string;
   description: string | null;
   imageUrl: string | null;
   slug: string | null;
-  linkType: LinkType;
+  linkType: ProductType;  // Keep as linkType for API compatibility
   amount: string;
   asset: string;
   network: string;
@@ -202,6 +204,7 @@ export interface PaymentLink {
   method: string;
   headersForward: string[];
   accessTtl: number;
+  groupName: string | null;  // Group name for product variants
   webhookId: string | null;
   webhookUrl: string | null;
   active: boolean;
@@ -215,7 +218,10 @@ export interface PaymentLink {
   updatedAt?: string;
 }
 
-export interface PaymentLinkPayment {
+/** @deprecated Use Product instead */
+export type PaymentLink = Product;
+
+export interface ProductPayment {
   id: string;
   payerAddress: string;
   amount: string;
@@ -225,12 +231,15 @@ export interface PaymentLinkPayment {
   createdAt: string;
 }
 
-export interface CreatePaymentLinkRequest {
+/** @deprecated Use ProductPayment instead */
+export type PaymentLinkPayment = ProductPayment;
+
+export interface CreateProductRequest {
   name: string;
   description?: string;
   imageUrl?: string;
   slug?: string;
-  linkType?: LinkType;
+  linkType?: ProductType;
   amount: string;
   asset: string;
   network: string;
@@ -239,22 +248,201 @@ export interface CreatePaymentLinkRequest {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'ANY';
   headersForward?: string[];
   accessTtl?: number;
+  groupName?: string;  // Group name for product variants
   webhookId?: string;
   webhookUrl?: string;
 }
 
-export interface PaymentLinksResponse {
-  links: PaymentLink[];
+/** @deprecated Use CreateProductRequest instead */
+export type CreatePaymentLinkRequest = CreateProductRequest;
+
+export interface ProductsResponse {
+  products: Product[];
   stats: {
-    totalLinks: number;
-    activeLinks: number;
+    totalProducts: number;
+    activeProducts: number;
     totalPayments: number;
     totalAmountCollected: string;
   };
 }
 
-export interface PaymentLinkDetailResponse extends PaymentLink {
-  payments: PaymentLinkPayment[];
+/** @deprecated Use ProductsResponse instead */
+export type PaymentLinksResponse = ProductsResponse;
+
+export interface ProductDetailResponse extends Product {
+  payments: ProductPayment[];
+}
+
+/** @deprecated Use ProductDetailResponse instead */
+export type PaymentLinkDetailResponse = ProductDetailResponse;
+
+// Storefronts (product collections)
+export interface Storefront {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  imageUrl: string | null;
+  active: boolean;
+  url: string;
+  productCount?: number;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface StorefrontProduct {
+  id: string;
+  name: string;
+  description: string | null;
+  imageUrl: string | null;
+  amount: string;
+  asset: string;
+  network: string;
+  active: boolean;
+}
+
+export interface CreateStorefrontRequest {
+  name: string;
+  slug: string;
+  description?: string;
+  imageUrl?: string;
+}
+
+export interface StorefrontsResponse {
+  storefronts: Storefront[];
+  stats: {
+    totalStorefronts: number;
+    activeStorefronts: number;
+  };
+}
+
+export interface StorefrontDetailResponse extends Storefront {
+  products: StorefrontProduct[];
+}
+
+// Refund types
+export interface RefundConfig {
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RefundWallet {
+  network: string;
+  address: string;
+  balance: string;
+  createdAt: string;
+}
+
+export interface RefundWalletsResponse {
+  wallets: RefundWallet[];
+  supportedNetworks: string[];
+}
+
+export interface RegisteredServer {
+  id: string;
+  url: string;
+  name: string | null;
+  active: boolean;
+  apiKey?: string; // Only on creation
+  createdAt: string;
+}
+
+export interface RegisteredServersResponse {
+  servers: RegisteredServer[];
+}
+
+export interface Claim {
+  id: string;
+  serverId: string;
+  originalTxHash: string;
+  userWallet: string;
+  amount: string;
+  asset: string;
+  network: string;
+  reason: string | null;
+  status: 'pending' | 'approved' | 'paid' | 'rejected' | 'expired';
+  payoutTxHash: string | null;
+  reportedAt: string;
+  paidAt: string | null;
+  expiresAt: string | null;
+}
+
+export interface ClaimStats {
+  totalClaims: number;
+  pendingClaims: number;
+  approvedClaims: number;
+  paidClaims: number;
+  rejectedClaims: number;
+  expiredClaims: number;
+  totalPaidAmount: string;
+}
+
+export interface ClaimsResponse {
+  claims: Claim[];
+  stats: ClaimStats;
+  pagination?: { limit: number; offset: number };
+}
+
+// Resource Owner types (for overview)
+export interface ResourceOwnerStats {
+  wallets: number;
+  servers: number;
+  totalClaims: number;
+  pendingClaims: number;
+  paidClaims: number;
+  totalPaidAmount: string;
+}
+
+export interface ResourceOwner {
+  id: string;
+  userId: string;
+  refundAddress: string | null;
+  name: string | null;
+  createdAt: string;
+  stats: ResourceOwnerStats;
+}
+
+export interface MyResourceOwner {
+  id: string;
+  facilitatorId: string;
+  userId: string;
+  refundAddress: string | null;
+  name: string | null;
+  createdAt: string;
+}
+
+export interface ResourceOwnersResponse {
+  resourceOwners: ResourceOwner[];
+  total: number;
+}
+
+export interface ResourceOwnerDetail {
+  id: string;
+  userId: string;
+  refundAddress: string | null;
+  name: string | null;
+  createdAt: string;
+  wallets: RefundWallet[];
+  servers: RegisteredServer[];
+  claimStats: ClaimStats;
+  recentClaims: Claim[];
+}
+
+export interface RefundsOverview {
+  resourceOwners: number;
+  totalWallets: number;
+  totalServers: number;
+  totalWalletBalance: string;
+  claims: {
+    total: number;
+    pending: number;
+    approved: number;
+    paid: number;
+    rejected: number;
+    totalPaidAmount: string;
+  };
+  supportedNetworks: string[];
 }
 
 class ApiClient {
@@ -565,30 +753,30 @@ class ApiClient {
     return data;
   }
 
-  // Payment Links
-  async getPaymentLinks(facilitatorId: string): Promise<PaymentLinksResponse> {
+  // Products (x402 resources)
+  async getProducts(facilitatorId: string): Promise<ProductsResponse> {
     return this.request(`/api/admin/facilitators/${facilitatorId}/payment-links`);
   }
 
-  async createPaymentLink(facilitatorId: string, data: CreatePaymentLinkRequest): Promise<PaymentLink> {
+  async createProduct(facilitatorId: string, data: CreateProductRequest): Promise<Product> {
     return this.request(`/api/admin/facilitators/${facilitatorId}/payment-links`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
-  async getPaymentLink(facilitatorId: string, linkId: string): Promise<PaymentLinkDetailResponse> {
-    return this.request(`/api/admin/facilitators/${facilitatorId}/payment-links/${linkId}`);
+  async getProduct(facilitatorId: string, productId: string): Promise<ProductDetailResponse> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/payment-links/${productId}`);
   }
 
-  async updatePaymentLink(
+  async updateProduct(
     facilitatorId: string,
-    linkId: string,
+    productId: string,
     data: Partial<{
       name: string;
       description: string | null;
       slug: string;
-      linkType: LinkType;
+      linkType: ProductType;
       amount: string;
       asset: string;
       network: string;
@@ -597,23 +785,36 @@ class ApiClient {
       method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'ANY';
       headersForward: string[];
       accessTtl: number;
+      groupName: string | null;
       webhookId: string | null;
       webhookUrl: string | null;
       imageUrl: string | null;
       active: boolean;
     }>
-  ): Promise<PaymentLink> {
-    return this.request(`/api/admin/facilitators/${facilitatorId}/payment-links/${linkId}`, {
+  ): Promise<Product> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/payment-links/${productId}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
   }
 
-  async deletePaymentLink(facilitatorId: string, linkId: string): Promise<void> {
-    return this.request(`/api/admin/facilitators/${facilitatorId}/payment-links/${linkId}`, {
+  async deleteProduct(facilitatorId: string, productId: string): Promise<void> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/payment-links/${productId}`, {
       method: 'DELETE',
     });
   }
+
+  // Backwards compatibility aliases
+  /** @deprecated Use getProducts instead */
+  getPaymentLinks = this.getProducts;
+  /** @deprecated Use createProduct instead */
+  createPaymentLink = this.createProduct;
+  /** @deprecated Use getProduct instead */
+  getPaymentLink = this.getProduct;
+  /** @deprecated Use updateProduct instead */
+  updatePaymentLink = this.updateProduct;
+  /** @deprecated Use deleteProduct instead */
+  deletePaymentLink = this.deleteProduct;
 
   // First-Class Webhooks
   async getWebhooks(facilitatorId: string): Promise<WebhooksResponse> {
@@ -716,6 +917,165 @@ class ApiClient {
   async deleteProxyUrl(facilitatorId: string, urlId: string): Promise<void> {
     return this.request(`/api/admin/facilitators/${facilitatorId}/urls/${urlId}`, {
       method: 'DELETE',
+    });
+  }
+
+  // Storefronts (product collections)
+  async getStorefronts(facilitatorId: string): Promise<StorefrontsResponse> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/storefronts`);
+  }
+
+  async createStorefront(facilitatorId: string, data: CreateStorefrontRequest): Promise<Storefront> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/storefronts`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getStorefront(facilitatorId: string, storefrontId: string): Promise<StorefrontDetailResponse> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/storefronts/${storefrontId}`);
+  }
+
+  async updateStorefront(
+    facilitatorId: string,
+    storefrontId: string,
+    data: Partial<{
+      name: string;
+      slug: string;
+      description: string | null;
+      imageUrl: string | null;
+      active: boolean;
+    }>
+  ): Promise<Storefront> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/storefronts/${storefrontId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteStorefront(facilitatorId: string, storefrontId: string): Promise<void> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/storefronts/${storefrontId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async addProductToStorefront(facilitatorId: string, storefrontId: string, productId: string): Promise<void> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/storefronts/${storefrontId}/products`, {
+      method: 'POST',
+      body: JSON.stringify({ productId }),
+    });
+  }
+
+  async removeProductFromStorefront(facilitatorId: string, storefrontId: string, productId: string): Promise<void> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/storefronts/${storefrontId}/products/${productId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Refund Config
+  async getRefundConfig(facilitatorId: string): Promise<RefundConfig> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/refunds/config`);
+  }
+
+  async updateRefundConfig(facilitatorId: string, data: { enabled: boolean }): Promise<RefundConfig> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/refunds/config`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Refunds Overview (for facilitator admins)
+  async getRefundsOverview(facilitatorId: string): Promise<RefundsOverview> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/refunds/overview`);
+  }
+
+  // Resource Owners (for facilitator admins)
+  async getResourceOwners(facilitatorId: string): Promise<ResourceOwnersResponse> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/resource-owners`);
+  }
+
+  async getResourceOwner(facilitatorId: string, resourceOwnerId: string): Promise<ResourceOwnerDetail> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/resource-owners/${resourceOwnerId}`);
+  }
+
+  // Current user's resource owner management
+  async getMyResourceOwner(facilitatorSubdomain: string): Promise<MyResourceOwner | null> {
+    try {
+      return await this.request(`/api/resource-owners/me?facilitator=${facilitatorSubdomain}`);
+    } catch {
+      return null;
+    }
+  }
+
+  async registerAsResourceOwner(facilitatorSubdomain: string, data: { name?: string; refundAddress?: string }): Promise<MyResourceOwner> {
+    return this.request('/api/resource-owners/register', {
+      method: 'POST',
+      body: JSON.stringify({ facilitator: facilitatorSubdomain, ...data }),
+    });
+  }
+
+  async getMyWallets(resourceOwnerId: string): Promise<{ wallets: RefundWallet[]; supportedNetworks: string[] }> {
+    return this.request(`/api/resource-owners/${resourceOwnerId}/wallets`);
+  }
+
+  async generateMyWallet(resourceOwnerId: string, network: string): Promise<RefundWallet> {
+    return this.request(`/api/resource-owners/${resourceOwnerId}/wallets`, {
+      method: 'POST',
+      body: JSON.stringify({ network }),
+    });
+  }
+
+  async deleteMyWallet(resourceOwnerId: string, network: string): Promise<void> {
+    return this.request(`/api/resource-owners/${resourceOwnerId}/wallets/${network}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getMyServers(resourceOwnerId: string): Promise<{ servers: RegisteredServer[] }> {
+    return this.request(`/api/resource-owners/${resourceOwnerId}/servers`);
+  }
+
+  async registerMyServer(resourceOwnerId: string, data: { url: string; name?: string }): Promise<{ server: RegisteredServer; apiKey: string }> {
+    return this.request(`/api/resource-owners/${resourceOwnerId}/servers`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteMyServer(resourceOwnerId: string, serverId: string): Promise<void> {
+    return this.request(`/api/resource-owners/${resourceOwnerId}/servers/${serverId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async regenerateMyServerApiKey(resourceOwnerId: string, serverId: string): Promise<{ apiKey: string }> {
+    return this.request(`/api/resource-owners/${resourceOwnerId}/servers/${serverId}/regenerate-key`, {
+      method: 'POST',
+    });
+  }
+
+  async getMyClaims(resourceOwnerId: string, status?: string): Promise<{ claims: Claim[]; stats: ClaimStats }> {
+    const url = status && status !== 'all'
+      ? `/api/resource-owners/${resourceOwnerId}/claims?status=${status}`
+      : `/api/resource-owners/${resourceOwnerId}/claims`;
+    return this.request(url);
+  }
+
+  async approveMyClaim(resourceOwnerId: string, claimId: string): Promise<void> {
+    return this.request(`/api/resource-owners/${resourceOwnerId}/claims/${claimId}/approve`, {
+      method: 'POST',
+    });
+  }
+
+  async rejectMyClaim(resourceOwnerId: string, claimId: string): Promise<void> {
+    return this.request(`/api/resource-owners/${resourceOwnerId}/claims/${claimId}/reject`, {
+      method: 'POST',
+    });
+  }
+
+  async executeMyClaimPayout(resourceOwnerId: string, claimId: string): Promise<void> {
+    return this.request(`/api/resource-owners/${resourceOwnerId}/claims/${claimId}/payout`, {
+      method: 'POST',
     });
   }
 }

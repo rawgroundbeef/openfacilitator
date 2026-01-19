@@ -16,10 +16,10 @@ export interface SettlementWebhookPayload {
   };
 }
 
-export interface PaymentLinkWebhookPayload {
-  event: 'payment_link.payment';
-  paymentLinkId: string;
-  paymentLinkName: string;
+export interface ProductWebhookPayload {
+  event: 'product.payment';
+  productId: string;
+  productName: string;
   timestamp: string;
   payment: {
     id: string;
@@ -31,6 +31,9 @@ export interface PaymentLinkWebhookPayload {
   };
 }
 
+/** @deprecated Use ProductWebhookPayload instead */
+export type PaymentLinkWebhookPayload = ProductWebhookPayload;
+
 export interface TestWebhookPayload {
   event: 'webhook.test';
   facilitatorId: string;
@@ -40,7 +43,7 @@ export interface TestWebhookPayload {
   message: string;
 }
 
-export type WebhookPayload = SettlementWebhookPayload | PaymentLinkWebhookPayload | TestWebhookPayload;
+export type WebhookPayload = SettlementWebhookPayload | ProductWebhookPayload | TestWebhookPayload;
 
 /**
  * Generate a webhook secret (32 bytes, hex encoded)

@@ -9,16 +9,16 @@ import {
 } from '../db/facilitators.js';
 import { getTransactionsByFacilitator, getTransactionStats, getDailyStats } from '../db/transactions.js';
 import {
-  createPaymentLink,
-  getPaymentLinkById,
-  getPaymentLinksByFacilitator,
-  updatePaymentLink,
-  deletePaymentLink,
-  getPaymentLinkStats,
-  getPaymentLinkPayments,
-  getFacilitatorPaymentLinksStats,
-  isSlugUnique,
-} from '../db/payment-links.js';
+  createProduct,
+  getProductById,
+  getProductsByFacilitator,
+  updateProduct,
+  deleteProduct,
+  getProductStats,
+  getProductPayments,
+  getFacilitatorProductsStats,
+  isProductSlugUnique,
+} from '../db/products.js';
 import {
   createWebhook,
   getWebhookById,
@@ -40,6 +40,46 @@ import {
   deleteProxyUrl,
   isSlugUnique as isProxySlugUnique,
 } from '../db/proxy-urls.js';
+import {
+  createStorefront,
+  getStorefrontById,
+  getStorefrontBySlug,
+  getStorefrontsByFacilitator,
+  updateStorefront,
+  deleteStorefront,
+  isStorefrontSlugUnique,
+  addProductToStorefront,
+  removeProductFromStorefront,
+  getStorefrontProducts,
+  getStorefrontStats,
+  getFacilitatorStorefrontsStats,
+} from '../db/storefronts.js';
+import {
+  getOrCreateRefundConfig,
+  updateRefundConfig,
+} from '../db/refund-configs.js';
+import {
+  getRefundWallet,
+  getRefundWalletsByResourceOwner,
+} from '../db/refund-wallets.js';
+import {
+  getRegisteredServerById,
+  getRegisteredServersByResourceOwner,
+} from '../db/registered-servers.js';
+import {
+  getClaimsByResourceOwner,
+  getClaimById,
+  getClaimStats,
+} from '../db/claims.js';
+import {
+  getResourceOwnersByFacilitator,
+  getResourceOwnerById,
+} from '../db/resource-owners.js';
+import {
+  getRefundWalletBalance,
+  getRefundWalletBalances,
+  SUPPORTED_REFUND_NETWORKS,
+} from '../services/refund-wallet.js';
 import { getDatabase } from '../db/index.js';
 import { 
   defaultTokens, 
@@ -1835,7 +1875,17 @@ router.post('/facilitators/:id/webhooks/:webhookId/test', requireAuth, async (re
 
 // ============= PAYMENT LINKS ENDPOINTS =============
 
-const createPaymentLinkSchema = z.object({
+// Schema for required field definitions (product customization fields)
+const requiredFieldDefinitionSchema = z.object({
+  name: z.string().min(1).max(50).regex(/^[a-z0-9_]+$/, 'Field name must be lowercase alphanumeric with underscores'),
+  type: z.enum(['text', 'select', 'address', 'email', 'number']),
+  label: z.string().max(100).optional(),
+  options: z.array(z.string().max(100)).optional(), // For select type
+  required: z.boolean().optional().default(true),
+  placeholder: z.string().max(200).optional(),
+});
+
+const createProductSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().max(500).optional(),
   imageUrl: z.string().url().max(2048).optional(), // Product image for storefront
@@ -1849,11 +1899,13 @@ const createPaymentLinkSchema = z.object({
   method: z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'ANY']).optional().default('GET'), // For proxy type
   headersForward: z.array(z.string()).optional(), // Headers to forward for proxy type
   accessTtl: z.number().int().min(0).optional().default(0), // Seconds of access after payment (0 = pay per visit)
+  requiredFields: z.array(requiredFieldDefinitionSchema).optional(), // Fields customer must provide at checkout
+  groupName: z.string().max(100).optional(), // Group name for variant products
   webhookId: z.string().optional(), // Reference to first-class webhook
   webhookUrl: z.string().url().max(2048).optional(), // Deprecated: inline webhook URL
 });
 
-const updatePaymentLinkSchema = z.object({
+const updateProductSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   description: z.string().max(500).optional().nullable(),
   imageUrl: z.string().url().max(2048).optional().nullable(), // Product image for storefront
@@ -1867,13 +1919,15 @@ const updatePaymentLinkSchema = z.object({
   method: z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'ANY']).optional(),
   headersForward: z.array(z.string()).optional(),
   accessTtl: z.number().int().min(0).optional(), // Seconds of access after payment (0 = pay per visit)
+  requiredFields: z.array(requiredFieldDefinitionSchema).optional().nullable(), // Fields customer must provide at checkout
+  groupName: z.string().max(100).optional().nullable(), // Group name for variant products
   webhookId: z.string().optional().nullable(), // Reference to first-class webhook
   webhookUrl: z.string().url().max(2048).optional().nullable(), // Deprecated: inline webhook URL
   active: z.boolean().optional(),
 });
 
 // Helper to build payment link URL based on environment
-function getPaymentLinkUrl(subdomain: string, customDomain: string | null, linkIdOrSlug: string): string {
+function getProductUrl(subdomain: string, customDomain: string | null, linkIdOrSlug: string): string {
   if (process.env.NODE_ENV === 'development') {
     return `http://localhost:5002/pay/${linkIdOrSlug}?_subdomain=${subdomain}`;
   }
@@ -1895,12 +1949,12 @@ router.get('/facilitators/:id/payment-links', requireAuth, async (req: Request, 
       return;
     }
 
-    const links = getPaymentLinksByFacilitator(req.params.id);
-    const aggregateStats = getFacilitatorPaymentLinksStats(req.params.id);
+    const links = getProductsByFacilitator(req.params.id);
+    const aggregateStats = getFacilitatorProductsStats(req.params.id);
 
     // Get stats for each link
     const linksWithStats = links.map((link) => {
-      const stats = getPaymentLinkStats(link.id);
+      const stats = getProductStats(link.id);
       // Use slug for URL if available, otherwise use ID
       const urlPath = link.slug || link.id;
       return {
@@ -1918,10 +1972,12 @@ router.get('/facilitators/:id/payment-links', requireAuth, async (req: Request, 
         method: link.method,
         headersForward: JSON.parse(link.headers_forward || '[]'),
         accessTtl: link.access_ttl,
+        requiredFields: JSON.parse(link.required_fields || '[]'),
+        groupName: link.group_name,
         webhookId: link.webhook_id,
         webhookUrl: link.webhook_url,
         active: link.active === 1,
-        url: getPaymentLinkUrl(facilitator.subdomain, facilitator.custom_domain, urlPath),
+        url: getProductUrl(facilitator.subdomain, facilitator.custom_domain, urlPath),
         stats: {
           totalPayments: stats.totalPayments,
           successfulPayments: stats.successfulPayments,
@@ -1933,7 +1989,7 @@ router.get('/facilitators/:id/payment-links', requireAuth, async (req: Request, 
     });
 
     res.json({
-      links: linksWithStats,
+      products: linksWithStats,
       stats: aggregateStats,
     });
   } catch (error) {
@@ -1947,7 +2003,7 @@ router.get('/facilitators/:id/payment-links', requireAuth, async (req: Request, 
  */
 router.post('/facilitators/:id/payment-links', requireAuth, async (req: Request, res: Response) => {
   try {
-    const parsed = createPaymentLinkSchema.safeParse(req.body);
+    const parsed = createProductSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
         error: 'Invalid request',
@@ -1963,7 +2019,7 @@ router.post('/facilitators/:id/payment-links', requireAuth, async (req: Request,
     }
 
     // Validate slug uniqueness if provided
-    if (parsed.data.slug && !isSlugUnique(req.params.id, parsed.data.slug)) {
+    if (parsed.data.slug && !isProductSlugUnique(req.params.id, parsed.data.slug)) {
       res.status(400).json({ error: 'Slug already in use' });
       return;
     }
@@ -1980,7 +2036,7 @@ router.post('/facilitators/:id/payment-links', requireAuth, async (req: Request,
       webhookSecret = generateWebhookSecret();
     }
 
-    const link = createPaymentLink({
+    const link = createProduct({
       facilitator_id: req.params.id,
       name: parsed.data.name,
       description: parsed.data.description,
@@ -1995,6 +2051,8 @@ router.post('/facilitators/:id/payment-links', requireAuth, async (req: Request,
       method: parsed.data.method,
       headers_forward: parsed.data.headersForward,
       access_ttl: parsed.data.accessTtl,
+      required_fields: parsed.data.requiredFields,
+      group_name: parsed.data.groupName,
       webhook_id: parsed.data.webhookId,
       webhook_url: parsed.data.webhookUrl,
       webhook_secret: webhookSecret,
@@ -2018,10 +2076,12 @@ router.post('/facilitators/:id/payment-links', requireAuth, async (req: Request,
       method: link.method,
       headersForward: JSON.parse(link.headers_forward || '[]'),
       accessTtl: link.access_ttl,
+      requiredFields: JSON.parse(link.required_fields || '[]'),
+      groupName: link.group_name,
       webhookId: link.webhook_id,
       webhookUrl: link.webhook_url,
       active: link.active === 1,
-      url: getPaymentLinkUrl(facilitator.subdomain, facilitator.custom_domain, urlPath),
+      url: getProductUrl(facilitator.subdomain, facilitator.custom_domain, urlPath),
       createdAt: formatSqliteDate(link.created_at),
     });
   } catch (error) {
@@ -2041,16 +2101,16 @@ router.get('/facilitators/:id/payment-links/:linkId', requireAuth, async (req: R
       return;
     }
 
-    const link = getPaymentLinkById(req.params.linkId);
+    const link = getProductById(req.params.linkId);
     if (!link || link.facilitator_id !== req.params.id) {
       res.status(404).json({ error: 'Payment link not found' });
       return;
     }
 
-    const stats = getPaymentLinkStats(link.id);
+    const stats = getProductStats(link.id);
     const limit = parseInt(req.query.limit as string) || 20;
     const offset = parseInt(req.query.offset as string) || 0;
-    const payments = getPaymentLinkPayments(link.id, limit, offset);
+    const payments = getProductPayments(link.id, limit, offset);
 
     // Use slug for URL if available, otherwise use ID
     const urlPath = link.slug || link.id;
@@ -2070,10 +2130,12 @@ router.get('/facilitators/:id/payment-links/:linkId', requireAuth, async (req: R
       method: link.method,
       headersForward: JSON.parse(link.headers_forward || '[]'),
       accessTtl: link.access_ttl,
+      requiredFields: JSON.parse(link.required_fields || '[]'),
+      groupName: link.group_name,
       webhookId: link.webhook_id,
       webhookUrl: link.webhook_url,
       active: link.active === 1,
-      url: getPaymentLinkUrl(facilitator.subdomain, facilitator.custom_domain, urlPath),
+      url: getProductUrl(facilitator.subdomain, facilitator.custom_domain, urlPath),
       stats,
       payments: payments.map((p) => ({
         id: p.id,
@@ -2082,6 +2144,7 @@ router.get('/facilitators/:id/payment-links/:linkId', requireAuth, async (req: R
         transactionHash: p.transaction_hash,
         status: p.status,
         errorMessage: p.error_message,
+        metadata: JSON.parse(p.metadata || '{}'),
         createdAt: formatSqliteDate(p.created_at),
       })),
       createdAt: formatSqliteDate(link.created_at),
@@ -2098,7 +2161,7 @@ router.get('/facilitators/:id/payment-links/:linkId', requireAuth, async (req: R
  */
 router.patch('/facilitators/:id/payment-links/:linkId', requireAuth, async (req: Request, res: Response) => {
   try {
-    const parsed = updatePaymentLinkSchema.safeParse(req.body);
+    const parsed = updateProductSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
         error: 'Invalid request',
@@ -2113,7 +2176,7 @@ router.patch('/facilitators/:id/payment-links/:linkId', requireAuth, async (req:
       return;
     }
 
-    const existingLink = getPaymentLinkById(req.params.linkId);
+    const existingLink = getProductById(req.params.linkId);
     if (!existingLink || existingLink.facilitator_id !== req.params.id) {
       res.status(404).json({ error: 'Payment link not found' });
       return;
@@ -2121,7 +2184,7 @@ router.patch('/facilitators/:id/payment-links/:linkId', requireAuth, async (req:
 
     // Validate slug uniqueness if being changed
     if (parsed.data.slug !== undefined && parsed.data.slug !== existingLink.slug) {
-      if (!isSlugUnique(req.params.id, parsed.data.slug, existingLink.id)) {
+      if (!isProductSlugUnique(req.params.id, parsed.data.slug, existingLink.id)) {
         res.status(400).json({ error: 'Slug already in use' });
         return;
       }
@@ -2139,7 +2202,7 @@ router.patch('/facilitators/:id/payment-links/:linkId', requireAuth, async (req:
       return;
     }
 
-    const updates: Parameters<typeof updatePaymentLink>[1] = {};
+    const updates: Parameters<typeof updateProduct>[1] = {};
     if (parsed.data.name !== undefined) updates.name = parsed.data.name;
     if (parsed.data.description !== undefined) updates.description = parsed.data.description;
     if (parsed.data.imageUrl !== undefined) updates.image_url = parsed.data.imageUrl;
@@ -2153,6 +2216,8 @@ router.patch('/facilitators/:id/payment-links/:linkId', requireAuth, async (req:
     if (parsed.data.method !== undefined) updates.method = parsed.data.method;
     if (parsed.data.headersForward !== undefined) updates.headers_forward = parsed.data.headersForward;
     if (parsed.data.accessTtl !== undefined) updates.access_ttl = parsed.data.accessTtl;
+    if (parsed.data.requiredFields !== undefined) updates.required_fields = parsed.data.requiredFields ?? [];
+    if (parsed.data.groupName !== undefined) updates.group_name = parsed.data.groupName;
     if (parsed.data.webhookId !== undefined) updates.webhook_id = parsed.data.webhookId;
     if (parsed.data.webhookUrl !== undefined) {
       updates.webhook_url = parsed.data.webhookUrl;
@@ -2163,7 +2228,7 @@ router.patch('/facilitators/:id/payment-links/:linkId', requireAuth, async (req:
     }
     if (parsed.data.active !== undefined) updates.active = parsed.data.active ? 1 : 0;
 
-    const link = updatePaymentLink(req.params.linkId, updates);
+    const link = updateProduct(req.params.linkId, updates);
     if (!link) {
       res.status(500).json({ error: 'Failed to update payment link' });
       return;
@@ -2187,10 +2252,12 @@ router.patch('/facilitators/:id/payment-links/:linkId', requireAuth, async (req:
       method: link.method,
       headersForward: JSON.parse(link.headers_forward || '[]'),
       accessTtl: link.access_ttl,
+      requiredFields: JSON.parse(link.required_fields || '[]'),
+      groupName: link.group_name,
       webhookId: link.webhook_id,
       webhookUrl: link.webhook_url,
       active: link.active === 1,
-      url: getPaymentLinkUrl(facilitator.subdomain, facilitator.custom_domain, urlPath),
+      url: getProductUrl(facilitator.subdomain, facilitator.custom_domain, urlPath),
       createdAt: formatSqliteDate(link.created_at),
       updatedAt: formatSqliteDate(link.updated_at),
     });
@@ -2211,13 +2278,13 @@ router.delete('/facilitators/:id/payment-links/:linkId', requireAuth, async (req
       return;
     }
 
-    const link = getPaymentLinkById(req.params.linkId);
+    const link = getProductById(req.params.linkId);
     if (!link || link.facilitator_id !== req.params.id) {
       res.status(404).json({ error: 'Payment link not found' });
       return;
     }
 
-    const deleted = deletePaymentLink(req.params.linkId);
+    const deleted = deleteProduct(req.params.linkId);
     if (!deleted) {
       res.status(500).json({ error: 'Failed to delete payment link' });
       return;
@@ -2503,6 +2570,574 @@ router.delete('/facilitators/:id/urls/:urlId', requireAuth, async (req: Request,
     res.status(204).send();
   } catch (error) {
     console.error('Delete proxy URL error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// =============================================================================
+// Storefront Routes
+// =============================================================================
+
+const createStorefrontSchema = z.object({
+  name: z.string().min(1).max(255),
+  slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/, 'Slug must be lowercase alphanumeric with dashes'),
+  description: z.string().max(2048).optional(),
+  imageUrl: z.string().url().max(2048).optional(),
+});
+
+const updateStorefrontSchema = z.object({
+  name: z.string().min(1).max(255).optional(),
+  slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/, 'Slug must be lowercase alphanumeric with dashes').optional(),
+  description: z.string().max(2048).optional().nullable(),
+  imageUrl: z.string().url().max(2048).optional().nullable(),
+  active: z.boolean().optional(),
+});
+
+// Helper to build storefront URL
+function getStorefrontUrl(subdomain: string, customDomain: string | null, slug: string): string {
+  if (process.env.NODE_ENV === 'development') {
+    return `http://localhost:5002/store/${slug}?_subdomain=${subdomain}`;
+  }
+  if (customDomain) {
+    return `https://${customDomain}/store/${slug}`;
+  }
+  return `https://${subdomain}.openfacilitator.io/store/${slug}`;
+}
+
+/**
+ * GET /api/admin/facilitators/:id/storefronts - List storefronts
+ */
+router.get('/facilitators/:id/storefronts', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const facilitator = getFacilitatorById(req.params.id);
+    if (!facilitator) {
+      res.status(404).json({ error: 'Facilitator not found' });
+      return;
+    }
+
+    const storefronts = getStorefrontsByFacilitator(req.params.id);
+    const stats = getFacilitatorStorefrontsStats(req.params.id);
+
+    res.json({
+      storefronts: storefronts.map((sf) => {
+        const sfStats = getStorefrontStats(sf.id);
+        return {
+          id: sf.id,
+          name: sf.name,
+          slug: sf.slug,
+          description: sf.description,
+          imageUrl: sf.image_url,
+          active: sf.active === 1,
+          url: getStorefrontUrl(facilitator.subdomain, facilitator.custom_domain, sf.slug),
+          productCount: sfStats.totalProducts,
+          createdAt: formatSqliteDate(sf.created_at),
+          updatedAt: formatSqliteDate(sf.updated_at),
+        };
+      }),
+      stats,
+    });
+  } catch (error) {
+    console.error('List storefronts error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/admin/facilitators/:id/storefronts - Create storefront
+ */
+router.post('/facilitators/:id/storefronts', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const parsed = createStorefrontSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid request', details: parsed.error.issues });
+      return;
+    }
+
+    const facilitator = getFacilitatorById(req.params.id);
+    if (!facilitator) {
+      res.status(404).json({ error: 'Facilitator not found' });
+      return;
+    }
+
+    // Check slug uniqueness
+    if (!isStorefrontSlugUnique(req.params.id, parsed.data.slug)) {
+      res.status(400).json({ error: 'Slug already in use' });
+      return;
+    }
+
+    const storefront = createStorefront({
+      facilitator_id: req.params.id,
+      name: parsed.data.name,
+      slug: parsed.data.slug,
+      description: parsed.data.description,
+      image_url: parsed.data.imageUrl,
+    });
+
+    res.status(201).json({
+      id: storefront.id,
+      name: storefront.name,
+      slug: storefront.slug,
+      description: storefront.description,
+      imageUrl: storefront.image_url,
+      active: storefront.active === 1,
+      url: getStorefrontUrl(facilitator.subdomain, facilitator.custom_domain, storefront.slug),
+      stats: { totalProducts: 0, activeProducts: 0 },
+      createdAt: formatSqliteDate(storefront.created_at),
+      updatedAt: formatSqliteDate(storefront.updated_at),
+    });
+  } catch (error) {
+    console.error('Create storefront error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/admin/facilitators/:id/storefronts/:storefrontId - Get storefront details
+ */
+router.get('/facilitators/:id/storefronts/:storefrontId', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const facilitator = getFacilitatorById(req.params.id);
+    if (!facilitator) {
+      res.status(404).json({ error: 'Facilitator not found' });
+      return;
+    }
+
+    const storefront = getStorefrontById(req.params.storefrontId);
+    if (!storefront || storefront.facilitator_id !== req.params.id) {
+      res.status(404).json({ error: 'Storefront not found' });
+      return;
+    }
+
+    const products = getStorefrontProducts(storefront.id);
+    const stats = getStorefrontStats(storefront.id);
+
+    res.json({
+      id: storefront.id,
+      name: storefront.name,
+      slug: storefront.slug,
+      description: storefront.description,
+      imageUrl: storefront.image_url,
+      active: storefront.active === 1,
+      url: getStorefrontUrl(facilitator.subdomain, facilitator.custom_domain, storefront.slug),
+      products: products.map((p) => ({
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        imageUrl: p.image_url,
+        amount: p.amount,
+        asset: p.asset,
+        network: p.network,
+      })),
+      stats,
+      createdAt: formatSqliteDate(storefront.created_at),
+      updatedAt: formatSqliteDate(storefront.updated_at),
+    });
+  } catch (error) {
+    console.error('Get storefront error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * PATCH /api/admin/facilitators/:id/storefronts/:storefrontId - Update storefront
+ */
+router.patch('/facilitators/:id/storefronts/:storefrontId', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const parsed = updateStorefrontSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Invalid request', details: parsed.error.issues });
+      return;
+    }
+
+    const facilitator = getFacilitatorById(req.params.id);
+    if (!facilitator) {
+      res.status(404).json({ error: 'Facilitator not found' });
+      return;
+    }
+
+    const storefront = getStorefrontById(req.params.storefrontId);
+    if (!storefront || storefront.facilitator_id !== req.params.id) {
+      res.status(404).json({ error: 'Storefront not found' });
+      return;
+    }
+
+    // Check slug uniqueness if changing
+    if (parsed.data.slug && parsed.data.slug !== storefront.slug) {
+      if (!isStorefrontSlugUnique(req.params.id, parsed.data.slug, storefront.id)) {
+        res.status(400).json({ error: 'Slug already in use' });
+        return;
+      }
+    }
+
+    const updated = updateStorefront(storefront.id, {
+      name: parsed.data.name,
+      slug: parsed.data.slug,
+      description: parsed.data.description,
+      image_url: parsed.data.imageUrl,
+      active: parsed.data.active,
+    });
+
+    if (!updated) {
+      res.status(500).json({ error: 'Failed to update storefront' });
+      return;
+    }
+
+    const stats = getStorefrontStats(updated.id);
+
+    res.json({
+      id: updated.id,
+      name: updated.name,
+      slug: updated.slug,
+      description: updated.description,
+      imageUrl: updated.image_url,
+      active: updated.active === 1,
+      url: getStorefrontUrl(facilitator.subdomain, facilitator.custom_domain, updated.slug),
+      stats,
+      createdAt: formatSqliteDate(updated.created_at),
+      updatedAt: formatSqliteDate(updated.updated_at),
+    });
+  } catch (error) {
+    console.error('Update storefront error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * DELETE /api/admin/facilitators/:id/storefronts/:storefrontId - Delete storefront
+ */
+router.delete('/facilitators/:id/storefronts/:storefrontId', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const facilitator = getFacilitatorById(req.params.id);
+    if (!facilitator) {
+      res.status(404).json({ error: 'Facilitator not found' });
+      return;
+    }
+
+    const storefront = getStorefrontById(req.params.storefrontId);
+    if (!storefront || storefront.facilitator_id !== req.params.id) {
+      res.status(404).json({ error: 'Storefront not found' });
+      return;
+    }
+
+    const deleted = deleteStorefront(storefront.id);
+    if (!deleted) {
+      res.status(500).json({ error: 'Failed to delete storefront' });
+      return;
+    }
+
+    res.status(204).send();
+  } catch (error) {
+    console.error('Delete storefront error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/admin/facilitators/:id/storefronts/:storefrontId/products - Add product to storefront
+ */
+router.post('/facilitators/:id/storefronts/:storefrontId/products', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { productId, position } = req.body;
+    if (!productId || typeof productId !== 'string') {
+      res.status(400).json({ error: 'productId is required' });
+      return;
+    }
+
+    const facilitator = getFacilitatorById(req.params.id);
+    if (!facilitator) {
+      res.status(404).json({ error: 'Facilitator not found' });
+      return;
+    }
+
+    const storefront = getStorefrontById(req.params.storefrontId);
+    if (!storefront || storefront.facilitator_id !== req.params.id) {
+      res.status(404).json({ error: 'Storefront not found' });
+      return;
+    }
+
+    const product = getProductById(productId);
+    if (!product || product.facilitator_id !== req.params.id) {
+      res.status(404).json({ error: 'Product not found' });
+      return;
+    }
+
+    const association = addProductToStorefront(storefront.id, productId, position);
+
+    res.status(201).json({
+      storefrontId: association.storefront_id,
+      productId: association.product_id,
+      position: association.position,
+    });
+  } catch (error) {
+    console.error('Add product to storefront error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * DELETE /api/admin/facilitators/:id/storefronts/:storefrontId/products/:productId - Remove product from storefront
+ */
+router.delete('/facilitators/:id/storefronts/:storefrontId/products/:productId', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const facilitator = getFacilitatorById(req.params.id);
+    if (!facilitator) {
+      res.status(404).json({ error: 'Facilitator not found' });
+      return;
+    }
+
+    const storefront = getStorefrontById(req.params.storefrontId);
+    if (!storefront || storefront.facilitator_id !== req.params.id) {
+      res.status(404).json({ error: 'Storefront not found' });
+      return;
+    }
+
+    const removed = removeProductFromStorefront(storefront.id, req.params.productId);
+    if (!removed) {
+      res.status(404).json({ error: 'Product not in storefront' });
+      return;
+    }
+
+    res.status(204).send();
+  } catch (error) {
+    console.error('Remove product from storefront error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================
+// REFUND MANAGEMENT ENDPOINTS
+// ============================================
+
+/**
+ * GET /api/admin/facilitators/:id/refunds/config - Get refund configuration
+ */
+router.get('/facilitators/:id/refunds/config', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const facilitator = getFacilitatorById(req.params.id);
+    if (!facilitator) {
+      res.status(404).json({ error: 'Facilitator not found' });
+      return;
+    }
+
+    const config = getOrCreateRefundConfig(req.params.id);
+
+    res.json({
+      enabled: config.enabled === 1,
+      createdAt: formatSqliteDate(config.created_at),
+      updatedAt: formatSqliteDate(config.updated_at),
+    });
+  } catch (error) {
+    console.error('Get refund config error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/admin/facilitators/:id/refunds/config - Update refund configuration
+ */
+router.post('/facilitators/:id/refunds/config', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const { enabled } = req.body;
+
+    const facilitator = getFacilitatorById(req.params.id);
+    if (!facilitator) {
+      res.status(404).json({ error: 'Facilitator not found' });
+      return;
+    }
+
+    // Ensure config exists
+    getOrCreateRefundConfig(req.params.id);
+
+    // Update config
+    const config = updateRefundConfig(req.params.id, {
+      enabled: enabled ? 1 : 0,
+    });
+
+    if (!config) {
+      res.status(500).json({ error: 'Failed to update refund config' });
+      return;
+    }
+
+    res.json({
+      enabled: config.enabled === 1,
+      createdAt: formatSqliteDate(config.created_at),
+      updatedAt: formatSqliteDate(config.updated_at),
+    });
+  } catch (error) {
+    console.error('Update refund config error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ============================================
+// RESOURCE OWNER OVERVIEW ENDPOINTS (for facilitator admins)
+// Resource owners manage their own wallets/servers/claims via the public API
+// ============================================
+
+/**
+ * GET /api/admin/facilitators/:id/resource-owners - List all resource owners
+ */
+router.get('/facilitators/:id/resource-owners', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const facilitator = getFacilitatorById(req.params.id);
+    if (!facilitator) {
+      res.status(404).json({ error: 'Facilitator not found' });
+      return;
+    }
+
+    const resourceOwners = getResourceOwnersByFacilitator(req.params.id);
+
+    // Get stats for each resource owner
+    const ownersWithStats = await Promise.all(
+      resourceOwners.map(async (owner) => {
+        const wallets = await getRefundWalletBalances(owner.id);
+        const servers = getRegisteredServersByResourceOwner(owner.id);
+        const claimStats = getClaimStats(owner.id);
+
+        return {
+          id: owner.id,
+          userId: owner.user_id,
+          refundAddress: owner.refund_address,
+          name: owner.name,
+          createdAt: formatSqliteDate(owner.created_at),
+          stats: {
+            wallets: wallets.length,
+            servers: servers.filter(s => s.active === 1).length,
+            totalClaims: claimStats.totalClaims,
+            pendingClaims: claimStats.pendingClaims,
+            paidClaims: claimStats.paidClaims,
+            totalPaidAmount: claimStats.totalPaidAmount,
+          },
+        };
+      })
+    );
+
+    res.json({
+      resourceOwners: ownersWithStats,
+      total: resourceOwners.length,
+    });
+  } catch (error) {
+    console.error('Get resource owners error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/admin/facilitators/:id/resource-owners/:ownerId - Get a specific resource owner with details
+ */
+router.get('/facilitators/:id/resource-owners/:ownerId', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const facilitator = getFacilitatorById(req.params.id);
+    if (!facilitator) {
+      res.status(404).json({ error: 'Facilitator not found' });
+      return;
+    }
+
+    const owner = getResourceOwnerById(req.params.ownerId);
+    if (!owner || owner.facilitator_id !== req.params.id) {
+      res.status(404).json({ error: 'Resource owner not found' });
+      return;
+    }
+
+    const wallets = await getRefundWalletBalances(owner.id);
+    const servers = getRegisteredServersByResourceOwner(owner.id);
+    const claimStats = getClaimStats(owner.id);
+    const claims = getClaimsByResourceOwner(owner.id, { limit: 20 });
+
+    res.json({
+      id: owner.id,
+      userId: owner.user_id,
+      refundAddress: owner.refund_address,
+      name: owner.name,
+      createdAt: formatSqliteDate(owner.created_at),
+      wallets,
+      servers: servers.map(s => ({
+        id: s.id,
+        url: s.url,
+        name: s.name,
+        active: s.active === 1,
+        createdAt: formatSqliteDate(s.created_at),
+      })),
+      claimStats,
+      recentClaims: claims.map((c) => ({
+        id: c.id,
+        originalTxHash: c.original_tx_hash,
+        userWallet: c.user_wallet,
+        amount: c.amount,
+        asset: c.asset,
+        network: c.network,
+        reason: c.reason,
+        status: c.status,
+        payoutTxHash: c.payout_tx_hash,
+        reportedAt: formatSqliteDate(c.reported_at),
+        paidAt: formatSqliteDate(c.paid_at),
+        expiresAt: formatSqliteDate(c.expires_at),
+      })),
+    });
+  } catch (error) {
+    console.error('Get resource owner error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/admin/facilitators/:id/refunds/overview - Get aggregate refund stats across all resource owners
+ */
+router.get('/facilitators/:id/refunds/overview', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const facilitator = getFacilitatorById(req.params.id);
+    if (!facilitator) {
+      res.status(404).json({ error: 'Facilitator not found' });
+      return;
+    }
+
+    const resourceOwners = getResourceOwnersByFacilitator(req.params.id);
+
+    // Aggregate stats across all resource owners
+    let totalClaims = 0;
+    let pendingClaims = 0;
+    let approvedClaims = 0;
+    let paidClaims = 0;
+    let rejectedClaims = 0;
+    let totalPaidAmount = 0;
+    let totalWallets = 0;
+    let totalServers = 0;
+    let totalWalletBalance = 0;
+
+    for (const owner of resourceOwners) {
+      const stats = getClaimStats(owner.id);
+      totalClaims += stats.totalClaims;
+      pendingClaims += stats.pendingClaims;
+      approvedClaims += stats.approvedClaims;
+      paidClaims += stats.paidClaims;
+      rejectedClaims += stats.rejectedClaims;
+      totalPaidAmount += parseFloat(stats.totalPaidAmount);
+
+      const wallets = await getRefundWalletBalances(owner.id);
+      totalWallets += wallets.length;
+      totalWalletBalance += wallets.reduce((sum, w) => sum + parseFloat(w.balance), 0);
+
+      const servers = getRegisteredServersByResourceOwner(owner.id);
+      totalServers += servers.filter(s => s.active === 1).length;
+    }
+
+    res.json({
+      resourceOwners: resourceOwners.length,
+      totalWallets,
+      totalServers,
+      totalWalletBalance: totalWalletBalance.toFixed(2),
+      claims: {
+        total: totalClaims,
+        pending: pendingClaims,
+        approved: approvedClaims,
+        paid: paidClaims,
+        rejected: rejectedClaims,
+        totalPaidAmount: totalPaidAmount.toFixed(2),
+      },
+      supportedNetworks: SUPPORTED_REFUND_NETWORKS,
+    });
+  } catch (error) {
+    console.error('Get refunds overview error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

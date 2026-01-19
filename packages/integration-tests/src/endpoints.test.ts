@@ -80,7 +80,7 @@ describe('free endpoint', () => {
 
       const result = await facilitator.verify(invalidPayment, requirements);
       
-      expect(result.valid).toBe(false);
+      expect(result.isValid).toBe(false);
       // Error message is optional - may or may not be present
     });
 
@@ -109,7 +109,7 @@ describe('free endpoint', () => {
 
       const result = await facilitator.verify(payment, requirements);
       
-      expect(result.valid).toBe(false);
+      expect(result.isValid).toBe(false);
     });
   });
 
@@ -221,7 +221,7 @@ describe('custom domain', () => {
       
       // Should return a response (valid or invalid) without throwing
       expect(result).toBeDefined();
-      expect(typeof result.valid).toBe('boolean');
+      expect(typeof result.isValid).toBe('boolean');
     });
   });
 });

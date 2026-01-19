@@ -5,7 +5,7 @@
  * GET /stats/base - Stats via Base payment ($5 USDC)
  */
 import { Router, type Request, type Response, type IRouter } from 'express';
-import { OpenFacilitator, type PaymentPayload, type PaymentRequirements } from '@openfacilitator/sdk';
+import { OpenFacilitator, createPaymentMiddleware, type PaymentRequirements } from '@openfacilitator/sdk';
 import { getGlobalStats } from '../db/transactions.js';
 
 const router: IRouter = Router();
@@ -13,15 +13,13 @@ const router: IRouter = Router();
 // Configuration
 const STATS_PRICE_ATOMIC = '5000000'; // $5 USDC (6 decimals)
 
-// Solana config (USDC mint is constant, others configurable)
+// Solana config (USDC mint is constant, treasury configurable)
 const USDC_SOLANA_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
-const SOLANA_TREASURY = process.env.STATS_SOLANA_TREASURY || 'EnjogokdsxF7aK4bQ1KdJwzKbWePSpwKSHDgPy16GBuT';
-const SOLANA_FEE_PAYER = process.env.STATS_SOLANA_FEE_PAYER || 'Hbe1vdFs4EQVVAzcV12muHhr6DEKwrT9roMXGPLxLBLP';
+const SOLANA_TREASURY = process.env.TREASURY_SOLANA!;
 
-// Base config (USDC address is constant, others configurable)
+// Base config (USDC address is constant, treasury configurable)
 const USDC_BASE = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
-const BASE_TREASURY = process.env.STATS_BASE_TREASURY || '0xECfb34867Cc542E4B56E4Ed9161Eb704976710ce';
-const BASE_FEE_PAYER = process.env.STATS_BASE_FEE_PAYER || '0x7C766F5fd9Ab3Dc09ACad5ECfacc99c4781efe29';
+const BASE_TREASURY = process.env.TREASURY_BASE!;
 
 // Facilitator endpoint (configurable for self-hosted deployments)
 const FACILITATOR_URL = process.env.STATS_FACILITATOR_URL || 'https://pay.openfacilitator.io';
@@ -80,138 +78,101 @@ const OUTPUT_SCHEMA = {
   },
 };
 
-// Payment requirements by network
-const REQUIREMENTS = {
+// Base requirements by network (feePayer added dynamically from facilitator)
+const BASE_REQUIREMENTS = {
   solana: {
     scheme: 'exact',
-    network: 'solana',
+    network: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp', // CAIP-2 Solana mainnet
     maxAmountRequired: STATS_PRICE_ATOMIC,
     resource: `${API_URL}/stats/solana`,
     asset: USDC_SOLANA_MINT,
     payTo: SOLANA_TREASURY,
     description: 'OpenFacilitator Platform Statistics - $5 per request',
-    extra: {
-      feePayer: SOLANA_FEE_PAYER,
-    },
     outputSchema: OUTPUT_SCHEMA,
   },
   base: {
     scheme: 'exact',
-    network: 'base',
+    network: 'eip155:8453', // CAIP-2 Base mainnet
     maxAmountRequired: STATS_PRICE_ATOMIC,
     resource: `${API_URL}/stats/base`,
     asset: USDC_BASE,
     payTo: BASE_TREASURY,
     description: 'OpenFacilitator Platform Statistics - $5 per request',
-    extra: {
-      feePayer: BASE_FEE_PAYER,
-    },
     outputSchema: OUTPUT_SCHEMA,
   },
 };
 
-/**
- * Shared handler for stats endpoints
- */
-async function handleStatsRequest(
-  req: Request,
-  res: Response,
-  network: 'solana' | 'base'
-) {
-  const paymentHeader = req.header('X-PAYMENT');
-  const requirement = REQUIREMENTS[network];
+// Get requirements with feePayer from facilitator SDK
+async function getRequirements(network: 'solana' | 'base'): Promise<PaymentRequirements> {
+  const baseReq = BASE_REQUIREMENTS[network];
+  const feePayer = await facilitator.getFeePayer(baseReq.network);
 
-  // If no payment provided, return 402 with requirements
-  if (!paymentHeader) {
-    res.status(402).json({
-      x402Version: 1,
-      accepts: [requirement],
-      error: 'Payment Required',
-      message: `This endpoint requires a $5 USDC payment via x402 (${network})`,
-    });
-    return;
-  }
+  return {
+    ...baseReq,
+    extra: feePayer ? { feePayer } : undefined,
+  } as PaymentRequirements;
+}
 
-  try {
-    // Decode payment payload
-    let paymentPayload: PaymentPayload;
-    try {
-      const decoded = Buffer.from(paymentHeader, 'base64').toString('utf-8');
-      paymentPayload = JSON.parse(decoded);
-    } catch {
-      res.status(400).json({
-        error: 'Invalid payment payload',
-        message: 'Could not decode X-PAYMENT header',
-      });
-      return;
-    }
+// Get all requirements for multi-network 402 response
+async function getAllRequirements(): Promise<PaymentRequirements[]> {
+  const [solana, base] = await Promise.all([
+    getRequirements('solana'),
+    getRequirements('base'),
+  ]);
+  return [solana, base];
+}
 
-    // Verify payment
-    const verifyResult = await facilitator.verify(paymentPayload, requirement as PaymentRequirements);
+// Create middleware with refund protection if API key is configured
+const statsPaymentMiddleware = createPaymentMiddleware({
+  facilitator,
+  getRequirements: getAllRequirements,
+  refundProtection: process.env.DEMO_REFUND_API_KEY ? {
+    apiKey: process.env.DEMO_REFUND_API_KEY,
+    facilitatorUrl: API_URL,
+  } : undefined,
+});
 
-    if (!verifyResult.valid) {
-      res.status(402).json({
-        error: 'Payment verification failed',
-        reason: verifyResult.error || 'Unknown verification error',
-        accepts: [requirement],
-      });
-      return;
-    }
+// Handler for stats requests (called after middleware)
+function handleStatsSuccess(req: Request, res: Response) {
+  const paymentContext = (req as { paymentContext?: { transactionHash: string } }).paymentContext;
+  const stats = getGlobalStats();
 
-    // Settle payment
-    console.log('[Stats] Settling payment to:', FACILITATOR_URL);
-    const settleResult = await facilitator.settle(paymentPayload, requirement as PaymentRequirements);
-    console.log('[Stats] Settlement result:', JSON.stringify(settleResult, null, 2));
-
-    if (!settleResult.success) {
-      console.error('[Stats] Settlement FAILED:', settleResult.errorMessage);
-      res.status(402).json({
-        error: 'Payment settlement failed',
-        reason: settleResult.errorMessage || 'Unknown settlement error',
-        accepts: [requirement],
-      });
-      return;
-    }
-
-    // Payment successful - return stats
-    const stats = getGlobalStats();
-
-    res.json({
-      success: true,
-      paymentTxHash: settleResult.transactionHash,
-      timestamp: new Date().toISOString(),
-      stats,
-    });
-  } catch (error) {
-    console.error('[Stats] Error processing request:', error);
-    res.status(500).json({
-      error: 'Internal server error',
-      message: error instanceof Error ? error.message : 'Unknown error',
-    });
-  }
+  res.json({
+    success: true,
+    paymentTxHash: paymentContext?.transactionHash,
+    timestamp: new Date().toISOString(),
+    stats,
+  });
 }
 
 /**
  * GET /stats/solana - Platform statistics (Solana payment)
  */
-router.get('/stats/solana', (req: Request, res: Response) => {
-  handleStatsRequest(req, res, 'solana');
-});
+router.get('/stats/solana', statsPaymentMiddleware, handleStatsSuccess);
 
 /**
  * GET /stats/base - Platform statistics (Base payment)
  */
-router.get('/stats/base', (req: Request, res: Response) => {
-  handleStatsRequest(req, res, 'base');
-});
+router.get('/stats/base', statsPaymentMiddleware, handleStatsSuccess);
 
 /**
- * GET /stats - Redirect to available endpoints
+ * GET /stats - Show available endpoints with payment requirements
  */
-router.get('/stats', (_req: Request, res: Response) => {
+router.get('/stats', async (_req: Request, res: Response) => {
+  const requirements = await getAllRequirements();
+
+  // Add supportsRefunds if refund protection is configured
+  const accepts = requirements.map((req) => ({
+    ...req,
+    extra: {
+      ...req.extra,
+      ...(process.env.DEMO_REFUND_API_KEY ? { supportsRefunds: true } : {}),
+    },
+  }));
+
   res.status(402).json({
-    x402Version: 1,
-    accepts: [REQUIREMENTS.solana, REQUIREMENTS.base],
+    x402Version: 2,
+    accepts,
     error: 'Payment Required',
     message: 'Use /stats/solana or /stats/base for network-specific endpoints',
     endpoints: {

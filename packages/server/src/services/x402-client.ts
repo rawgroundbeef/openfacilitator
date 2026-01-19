@@ -319,7 +319,7 @@ export async function makeX402Payment(
     // Step 6: Create x402 payment payload
     // For Solana, the payload contains the signed transaction
     const paymentPayload = {
-      x402Version: 1,
+      x402Version: 2,
       payload: {
         transaction: serializedTransaction,
       },

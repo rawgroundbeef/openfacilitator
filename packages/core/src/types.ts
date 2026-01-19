@@ -109,10 +109,10 @@ export interface PaymentRequirements {
 }
 
 /**
- * Verification response
+ * Verification response (x402 standard format)
  */
 export interface VerifyResponse {
-  valid: boolean;
+  isValid: boolean;
   invalidReason?: string;
   payer?: string;
 }
@@ -127,13 +127,14 @@ export interface SettleRequest {
 }
 
 /**
- * Settlement response
+ * Settlement response (x402 standard format)
  */
 export interface SettleResponse {
   success: boolean;
-  transactionHash?: string;
-  errorMessage?: string;
-  network?: string;
+  transaction: string;  // Transaction hash, empty string "" when failed
+  payer: string;        // Payer address
+  network: string;      // Network identifier
+  errorReason?: string; // Error reason when success is false
 }
 
 /**

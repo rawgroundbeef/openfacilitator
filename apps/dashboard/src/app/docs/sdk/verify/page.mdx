@@ -52,8 +52,9 @@ interface PaymentRequirements {
 
 ```typescript
 interface VerifyResponse {
-  valid: boolean;
-  error?: string;
+  isValid: boolean;
+  invalidReason?: string;
+  payer?: string;
   details?: {
     amount?: string;
     recipient?: string;
@@ -90,11 +91,11 @@ const requirements = {
 
 const result = await facilitator.verify(payment, requirements);
 
-if (result.valid) {
+if (result.isValid) {
   // Payment is valid, proceed to settle
   await facilitator.settle(payment, requirements);
 } else {
-  console.error('Invalid payment:', result.error);
+  console.error('Invalid payment:', result.invalidReason);
 }
 ```
 
