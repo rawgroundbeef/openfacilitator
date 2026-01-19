@@ -1110,7 +1110,12 @@ class ApiClient {
     return this.request('/api/rewards/status');
   }
 
-  async enrollInRewards(data: { chain_type: 'solana' | 'evm'; address: string }): Promise<RewardsEnrollResponse> {
+  async enrollInRewards(data: {
+    chain_type: 'solana' | 'evm';
+    address: string;
+    signature: string;
+    message: string;
+  }): Promise<RewardsEnrollResponse> {
     const response = await fetch(`${this.baseUrl}/api/rewards/enroll`, {
       method: 'POST',
       credentials: 'include',
