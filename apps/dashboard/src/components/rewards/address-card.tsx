@@ -21,7 +21,7 @@ export interface AddressData {
 interface AddressCardProps {
   address: AddressData;
   onRemoveClick?: (address: AddressData) => void;
-  onVerify?: (address: string) => void;
+  onVerify?: () => void;
 }
 
 function ChainBadge({ chainType }: { chainType: 'solana' | 'evm' }) {
@@ -103,7 +103,7 @@ export function AddressCard({ address, onRemoveClick, onVerify }: AddressCardPro
             variant="outline"
             size="sm"
             className="h-7 text-xs"
-            onClick={() => onVerify(address.address)}
+            onClick={onVerify}
           >
             Verify
           </Button>

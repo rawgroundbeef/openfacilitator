@@ -80,6 +80,7 @@ export function RewardsInfoBanner() {
                     addresses={addresses}
                     onAddAddress={() => setEnrollmentOpen(true)}
                     onAddressRemoved={handleAddressRemoved}
+                    onVerify={() => setEnrollmentOpen(true)}
                   />
                 </div>
               )}
@@ -121,6 +122,7 @@ export function RewardsInfoBanner() {
               addresses={addresses}
               onAddAddress={() => setEnrollmentOpen(true)}
               onAddressRemoved={handleAddressRemoved}
+              onVerify={() => setEnrollmentOpen(true)}
             />
           </div>
         )}

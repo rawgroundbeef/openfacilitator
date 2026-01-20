@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { AddressCard, type AddressData } from './address-card';
 import { RemoveAddressDialog } from './remove-address-dialog';
 import { api, type RewardsStatus } from '@/lib/api';
-import { Plus, Wallet } from 'lucide-react';
+import { Plus, Wallet, AlertCircle } from 'lucide-react';
 
 const MAX_ADDRESSES = 5;
 
@@ -13,6 +13,7 @@ interface AddressListProps {
   addresses: RewardsStatus['addresses'];
   onAddAddress: () => void;
   onAddressRemoved: () => void;
+  onVerify?: () => void;
 }
 
 function SectionHeader({ title, count }: { title: string; count: number }) {
@@ -42,10 +43,32 @@ function EmptyState({ onAddAddress }: { onAddAddress: () => void }) {
   );
 }
 
+function PendingOnlyBanner({ onVerify }: { onVerify: () => void }) {
+  return (
+    <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+      <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-500 flex-shrink-0 mt-0.5" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-amber-800 dark:text-amber-200">
+          Your addresses are pending verification. Rewards won't be tracked until you verify at least one address.
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          className="mt-2 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/30"
+          onClick={onVerify}
+        >
+          Verify Now
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function AddressList({
   addresses,
   onAddAddress,
   onAddressRemoved,
+  onVerify,
 }: AddressListProps) {
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
   const [addressToRemove, setAddressToRemove] = useState<AddressData | null>(null);
@@ -54,6 +77,19 @@ export function AddressList({
   // Calculate if the address being removed is the last verified one
   const verifiedCount = addresses.filter(a => a.verification_status === 'verified').length;
   const isLastVerified = addressToRemove?.verification_status === 'verified' && verifiedCount === 1;
+
+  // Pending-only state: addresses exist but none are verified
+  const isPendingOnly = addresses.length > 0 && verifiedCount === 0;
+
+  // Handler for verify button - reuses enrollment modal
+  const handleVerify = () => {
+    if (onVerify) {
+      onVerify();
+    } else {
+      // Fallback to add address (opens enrollment modal)
+      onAddAddress();
+    }
+  };
 
   const handleRemoveClick = (address: AddressData) => {
     setAddressToRemove(address);
@@ -130,6 +166,10 @@ export function AddressList({
         </p>
       )}
 
+      {isPendingOnly && (
+        <PendingOnlyBanner onVerify={handleVerify} />
+      )}
+
       <div className="space-y-4">
         {/* Solana Section */}
         {solanaAddresses.length > 0 && (
@@ -141,6 +181,7 @@ export function AddressList({
                   key={address.id}
                   address={address}
                   onRemoveClick={handleRemoveClick}
+                  onVerify={address.verification_status === 'pending' ? handleVerify : undefined}
                 />
               ))}
             </div>
@@ -162,6 +203,7 @@ export function AddressList({
                   key={address.id}
                   address={address}
                   onRemoveClick={handleRemoveClick}
+                  onVerify={address.verification_status === 'pending' ? handleVerify : undefined}
                 />
               ))}
             </div>
