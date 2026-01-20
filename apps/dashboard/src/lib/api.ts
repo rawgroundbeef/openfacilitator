@@ -26,6 +26,60 @@ export interface RewardsEnrollResponse {
   created_at: string;
 }
 
+// Campaign types
+export interface Campaign {
+  id: string;
+  name: string;
+  pool_amount: string;
+  threshold_amount: string;
+  multiplier_facilitator: number;
+  starts_at: string;
+  ends_at: string;
+  status: 'draft' | 'published' | 'active' | 'ended';
+  distributed_amount?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CampaignAudit {
+  id: string;
+  campaign_id: string;
+  admin_user_id: string;
+  action: 'create' | 'update' | 'publish' | 'end';
+  changes: string;
+  created_at: string;
+}
+
+export interface CampaignWithAudit extends Campaign {
+  audit: CampaignAudit[];
+}
+
+export interface CampaignStats {
+  totalVolume: string;
+  participantCount: number;
+  userRank?: number;
+  userVolume?: string;
+}
+
+export interface CampaignHistoryItem {
+  campaign: Campaign;
+  userVolume: string;
+  userRank: number | null;
+  metThreshold: boolean;
+  multiplierApplied: number;
+  estimatedReward: string | null;
+  claimed: boolean;
+}
+
+export interface CreateCampaignRequest {
+  name: string;
+  pool_amount: string;
+  threshold_amount: string;
+  multiplier_facilitator?: number;
+  starts_at: string;
+  ends_at: string;
+}
+
 export interface Facilitator {
   id: string;
   name: string;
@@ -1139,6 +1193,61 @@ class ApiClient {
     return this.request(`/api/rewards/addresses/${addressId}`, {
       method: 'DELETE',
     });
+  }
+
+  // Admin Campaign Management
+  async getCampaigns(status?: string): Promise<Campaign[]> {
+    const url = status ? `/api/rewards/campaigns?status=${status}` : '/api/rewards/campaigns';
+    return this.request(url);
+  }
+
+  async getCampaign(id: string): Promise<CampaignWithAudit> {
+    return this.request(`/api/rewards/campaigns/${id}`);
+  }
+
+  async createCampaign(data: CreateCampaignRequest): Promise<Campaign> {
+    return this.request('/api/rewards/campaigns', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateCampaign(id: string, data: Partial<CreateCampaignRequest>): Promise<Campaign> {
+    return this.request(`/api/rewards/campaigns/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async publishCampaign(id: string): Promise<Campaign> {
+    return this.request(`/api/rewards/campaigns/${id}/publish`, {
+      method: 'POST',
+    });
+  }
+
+  async endCampaign(id: string): Promise<Campaign> {
+    return this.request(`/api/rewards/campaigns/${id}/end`, {
+      method: 'POST',
+    });
+  }
+
+  async deleteCampaign(id: string): Promise<void> {
+    return this.request(`/api/rewards/campaigns/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Public Campaign Endpoints
+  async getActiveCampaign(): Promise<{ campaign: Campaign | null; totalVolume: string }> {
+    return this.request('/api/rewards/campaigns/active');
+  }
+
+  async getCampaignHistory(): Promise<CampaignHistoryItem[]> {
+    return this.request('/api/rewards/campaigns/history');
+  }
+
+  async getCampaignStats(id: string): Promise<CampaignStats> {
+    return this.request(`/api/rewards/campaigns/${id}/stats`);
   }
 }
 
