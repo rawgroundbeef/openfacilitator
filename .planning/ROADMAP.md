@@ -90,11 +90,11 @@ Plans:
   2. User can remove a tracked address from their account
   3. User can track multiple addresses per account (both Solana and EVM)
   4. Address management interface is clear and usable
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 05-01: Address list view with status indicators
-- [ ] 05-02: Address removal and multi-address support
+- [ ] 05-01-PLAN.md — Enhanced address cards with chain icons, grouping, and count display
+- [ ] 05-02-PLAN.md — Remove confirmation dialog and pending-only state handling
 
 ### Phase 6: Volume Tracking Engine
 **Goal**: System accurately calculates qualifying volume for each user
@@ -202,7 +202,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 2. Auth Integration | 2/2 | Complete | 2026-01-19 |
 | 3. Solana Address Management | 2/2 | Complete | 2026-01-20 |
 | 4. EVM Address Management | 1/1 | Complete | 2026-01-19 |
-| 5. Address UI | 0/2 | Not started | - |
+| 5. Address UI | 0/2 | Planned | - |
 | 6. Volume Tracking Engine | 0/1 | Not started | - |
 | 7. Campaign System | 0/2 | Not started | - |
 | 8. Rewards Dashboard | 0/1 | Not started | - |
