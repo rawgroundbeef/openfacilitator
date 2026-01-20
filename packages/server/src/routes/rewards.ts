@@ -16,6 +16,10 @@ import {
   verifySolanaSignature,
   createVerificationMessage,
 } from '../utils/solana-verify.js';
+import {
+  verifyEVMSignature,
+  createEVMVerificationMessage,
+} from '../utils/evm-verify.js';
 
 const router: IRouter = Router();
 
@@ -84,32 +88,41 @@ router.post('/enroll', requireAuth, async (req: Request, res: Response) => {
 
     const { chain_type, address, signature, message } = parseResult.data;
 
-    // Only Solana addresses supported in this phase
-    if (chain_type !== 'solana') {
-      res.status(400).json({
-        error: 'Validation error',
-        message: 'Only Solana addresses supported currently',
-      });
-      return;
-    }
+    // Verify signature based on chain type
+    if (chain_type === 'solana') {
+      const expectedMessage = createVerificationMessage(address);
+      if (message !== expectedMessage) {
+        res.status(400).json({
+          error: 'Validation error',
+          message: 'Message format mismatch',
+        });
+        return;
+      }
 
-    // Verify expected message matches what client signed
-    const expectedMessage = createVerificationMessage(address);
-    if (message !== expectedMessage) {
-      res.status(400).json({
-        error: 'Validation error',
-        message: 'Message format mismatch',
-      });
-      return;
-    }
+      if (!verifySolanaSignature(address, signature, message)) {
+        res.status(400).json({
+          error: 'Validation error',
+          message: 'Invalid signature - could not verify address ownership',
+        });
+        return;
+      }
+    } else if (chain_type === 'evm') {
+      const expectedMessage = createEVMVerificationMessage(address);
+      if (message !== expectedMessage) {
+        res.status(400).json({
+          error: 'Validation error',
+          message: 'Message format mismatch',
+        });
+        return;
+      }
 
-    // Verify signature proves ownership of address
-    if (!verifySolanaSignature(address, signature, message)) {
-      res.status(400).json({
-        error: 'Validation error',
-        message: 'Invalid signature - could not verify address ownership',
-      });
-      return;
+      if (!(await verifyEVMSignature(address, signature, message))) {
+        res.status(400).json({
+          error: 'Validation error',
+          message: 'Invalid signature - could not verify address ownership',
+        });
+        return;
+      }
     }
 
     // Check global uniqueness - one address per user globally
