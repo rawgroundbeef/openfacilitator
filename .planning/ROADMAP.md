@@ -142,19 +142,18 @@ Plans:
 - [x] 08-01-PLAN.md — Progress dashboard with hero progress bar, reward estimates, address breakdown
 
 ### Phase 9: Wallet Connection
-**Goal**: Users can connect wallets for receiving claimed tokens
+**Goal**: Users can connect Solana wallet at claim time for receiving $OPEN tokens
 **Depends on**: Phase 8
-**Requirements**: AUTH-03, AUTH-04
+**Requirements**: AUTH-03
 **Success Criteria** (what must be TRUE):
   1. User can connect Solana wallet (Phantom, etc.) for claiming tokens
-  2. User can connect EVM wallet for address verification purposes
-  3. Connected wallet is stored and associated with user account
+  2. Wallet connection is ephemeral - specified per-claim, not stored permanently
+  3. Claim wallet is stored on claim record for history tracking
   4. Wallet connection uses standard adapter patterns (wallet-adapter-react)
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 09-01: Solana wallet adapter integration
-- [ ] 09-02: EVM wallet connection (wagmi/viem)
+- [ ] 09-01-PLAN.md — ClaimModal, ClaimButton, initiateClaim API endpoint
 
 ### Phase 10: Claims Engine
 **Goal**: Users can claim earned $OPEN tokens when eligible
@@ -206,7 +205,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 6. Volume Tracking Engine | 1/1 | Complete | 2026-01-20 |
 | 7. Campaign System | 2/2 | Complete | 2026-01-20 |
 | 8. Rewards Dashboard | 1/1 | Complete | 2026-01-20 |
-| 9. Wallet Connection | 0/2 | Not started | - |
+| 9. Wallet Connection | 0/1 | Not started | - |
 | 10. Claims Engine | 0/3 | Not started | - |
 | 11. Dashboard Integration | 0/3 | Not started | - |
 
