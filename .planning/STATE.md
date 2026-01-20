@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-01-19)
 
 **Core value:** Users who process volume through OpenFacilitator get rewarded with $OPEN tokens
-**Current focus:** Phase 6 - Volume Tracking Engine
+**Current focus:** Phase 6 - Volume Tracking Engine (Complete)
 
 ## Current Position
 
 Phase: 6 of 11 (Volume Tracking Engine)
-Plan: 0 of 1 in current phase
-Status: Ready to plan
-Last activity: 2026-01-20 - Phase 5 verified complete
+Plan: 1 of 1 in current phase (COMPLETE)
+Status: Phase complete
+Last activity: 2026-01-20 - Completed 06-01-PLAN.md
 
-Progress: [#####.....] 47%
+Progress: [#####.....] 53%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 8
-- Average duration: 3m 53s
-- Total execution time: 0.52 hours
+- Total plans completed: 9
+- Average duration: 3m 44s
+- Total execution time: 0.56 hours
 
 **By Phase:**
 
@@ -32,9 +32,10 @@ Progress: [#####.....] 47%
 | 03-solana-address-management | 2 | 12m 0s | 6m 0s |
 | 04-evm-address-management | 1 | 4m 0s | 4m 0s |
 | 05-address-ui | 2 | 7m 4s | 3m 32s |
+| 06-volume-tracking-engine | 1 | 2m 34s | 2m 34s |
 
 **Recent Trend:**
-- Last 5 plans: 03-02 (6m 0s), 04-01 (4m 0s), 05-01 (3m 0s), 05-02 (4m 4s)
+- Last 5 plans: 04-01 (4m 0s), 05-01 (3m 0s), 05-02 (4m 4s), 06-01 (2m 34s)
 - Trend: stable
 
 *Updated after each plan completion*
@@ -68,6 +69,9 @@ Recent decisions affecting current work:
 | D-05-02-001 | Volume history preserved on address removal | 05-02 |
 | D-05-02-002 | Last verified address removal shows amber warning but allowed | 05-02 |
 | D-05-02-003 | Verify button opens enrollment modal to re-sign ownership | 05-02 |
+| D-06-01-001 | Volume aggregation uses snapshot + live delta pattern for performance | 06-01 |
+| D-06-01-002 | Address-based and facilitator-ownership volume stack (2x when both apply) | 06-01 |
+| D-06-01-003 | Snapshot endpoint uses CRON_SECRET header (not auth middleware) for external scheduler access | 06-01 |
 
 ### Pending Todos
 
@@ -77,9 +81,10 @@ None yet.
 
 - **Pre-Phase 10:** Rewards wallet must be funded and multisig configured before claims go live
 - **Pre-Launch:** Legal review for securities compliance (frame as loyalty program)
+- **Pre-Production:** CRON_SECRET env var must be configured for volume snapshot cron jobs
 
 ## Session Continuity
 
-Last session: 2026-01-20T04:31Z
-Stopped at: Completed 05-02-PLAN.md (Phase 5 complete)
+Last session: 2026-01-20T14:04:48Z
+Stopped at: Completed 06-01-PLAN.md (Phase 6 complete)
 Resume file: None
