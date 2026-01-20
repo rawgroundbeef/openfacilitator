@@ -76,10 +76,10 @@ Plans:
   1. User can add an EVM address to track for rewards
   2. User can verify EVM address ownership via message signature (EIP-191)
   3. Verification flow mirrors Solana experience for consistency
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 04-01: EVM address registration and signature verification
+- [ ] 04-01-PLAN.md — EVM signature verification, wagmi provider, enrollment modal chain selector
 
 ### Phase 5: Address UI
 **Goal**: Users can manage their portfolio of tracked addresses
@@ -201,7 +201,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 -> 9 -> 10
 | 1. Database Foundation | 1/1 | Complete | 2026-01-19 |
 | 2. Auth Integration | 2/2 | Complete | 2026-01-19 |
 | 3. Solana Address Management | 2/2 | Complete | 2026-01-20 |
-| 4. EVM Address Management | 0/1 | Not started | - |
+| 4. EVM Address Management | 0/1 | Planned | - |
 | 5. Address UI | 0/2 | Not started | - |
 | 6. Volume Tracking Engine | 0/1 | Not started | - |
 | 7. Campaign System | 0/2 | Not started | - |
