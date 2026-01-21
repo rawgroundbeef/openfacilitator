@@ -17,7 +17,7 @@ import {
 } from '../db/subscriptions.js';
 import { getUserWalletByAddress } from '../db/user-wallets.js';
 import { getDatabase } from '../db/index.js';
-import { createFacilitator } from '../db/facilitators.js';
+import { createFacilitator, ensureFacilitatorMarker } from '../db/facilitators.js';
 import {
   getPendingFacilitatorByUserId,
   getPendingFacilitatorById,
@@ -83,6 +83,9 @@ async function createFacilitatorFromPending(options: { pendingId?: string; userI
 
     // Delete the pending facilitator record
     deletePendingFacilitator(pending.id);
+
+    // Ensure facilitator owner has enrollment marker for volume tracking
+    ensureFacilitatorMarker(pending.user_id);
 
     console.log(`[Subscription Webhook] Created facilitator ${facilitator.id} for user ${pending.user_id}`);
 

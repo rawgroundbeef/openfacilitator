@@ -6,6 +6,7 @@ import {
   getFacilitatorsByOwner,
   updateFacilitator,
   deleteFacilitator,
+  ensureFacilitatorMarker,
 } from '../db/facilitators.js';
 import { getTransactionsByFacilitator, getTransactionStats, getDailyStats } from '../db/transactions.js';
 import {
@@ -295,6 +296,9 @@ router.post('/facilitators', requireAuth, async (req: Request, res: Response) =>
       });
       return;
     }
+
+    // Ensure facilitator owner has enrollment marker for volume tracking
+    ensureFacilitatorMarker(ownerAddress);
 
     // Register subdomain with Railway
     const subdomainFull = `${subdomain}.openfacilitator.io`;
