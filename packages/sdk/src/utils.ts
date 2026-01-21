@@ -27,12 +27,23 @@ export function buildUrl(baseUrl: string, path: string): string {
 export function isPaymentPayload(value: unknown): value is PaymentPayload {
   if (!value || typeof value !== 'object') return false;
   const obj = value as Record<string, unknown>;
-  return (
-    (obj.x402Version === 1 || obj.x402Version === 2) &&
-    typeof obj.scheme === 'string' &&
-    typeof obj.network === 'string' &&
-    obj.payload !== undefined
-  );
+  if (obj.x402Version === 1) {
+    return (
+      typeof obj.scheme === 'string' &&
+      typeof obj.network === 'string' &&
+      obj.payload !== undefined
+    );
+  } else if (obj.x402Version === 2) {
+    const accepted = obj.accepted as Record<string, unknown> | undefined;
+    return (
+      accepted !== undefined &&
+      typeof accepted === 'object' &&
+      typeof accepted.scheme === 'string' &&
+      typeof accepted.network === 'string' &&
+      obj.payload !== undefined
+    );
+  }
+  return false;
 }
 
 // ============ Type Guards for Versioned Types ============
@@ -55,17 +66,23 @@ export function isPaymentPayloadV1(value: unknown): value is PaymentPayloadV1 {
 
 /**
  * Type guard for PaymentPayloadV2 (x402 version 2).
- * Narrows PaymentPayload to v2 format with CAIP-2 network identifiers.
+ * Narrows PaymentPayload to v2 format with nested `accepted` structure.
  */
 export function isPaymentPayloadV2(value: unknown): value is PaymentPayloadV2 {
   if (!value || typeof value !== 'object') return false;
   const obj = value as Record<string, unknown>;
+  if (obj.x402Version !== 2) return false;
+  const accepted = obj.accepted as Record<string, unknown> | undefined;
   return (
-    obj.x402Version === 2 &&
-    typeof obj.scheme === 'string' &&
-    typeof obj.network === 'string' &&
-    obj.payload !== undefined &&
-    typeof obj.payload === 'object'
+    accepted !== undefined &&
+    typeof accepted === 'object' &&
+    typeof accepted.scheme === 'string' &&
+    typeof accepted.network === 'string' &&
+    typeof accepted.asset === 'string' &&
+    typeof accepted.amount === 'string' &&
+    typeof accepted.payTo === 'string' &&
+    typeof accepted.maxTimeoutSeconds === 'number' &&
+    obj.payload !== undefined
   );
 }
 
@@ -95,16 +112,23 @@ export function isPaymentRequirementsV2(
 
 /**
  * Extract scheme and network from PaymentPayload (version-agnostic).
- * Both v1 and v2 have these fields at the top level.
+ * v1 has these at top level, v2 has them nested in `accepted`.
  */
 export function getSchemeNetwork(payload: PaymentPayload): {
   scheme: string;
   network: string;
 } {
-  return {
-    scheme: payload.scheme,
-    network: payload.network,
-  };
+  if (payload.x402Version === 1) {
+    return {
+      scheme: payload.scheme,
+      network: payload.network,
+    };
+  } else {
+    return {
+      scheme: payload.accepted.scheme,
+      network: payload.accepted.network,
+    };
+  }
 }
 
 /**

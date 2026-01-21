@@ -31,24 +31,41 @@ export interface PaymentPayloadV1 {
 }
 
 /**
- * Payment payload for x402 version 2. Uses CAIP-2 network identifiers. May include nested accepted requirements.
+ * Payment payload for x402 version 2. Uses nested `accepted` structure per @x402/core spec.
  */
 export interface PaymentPayloadV2 {
   /** x402 version 2 */
   x402Version: 2;
-  /** Payment scheme (e.g., "exact") */
-  scheme: string;
-  /** Network identifier - v2 CAIP-2 format (e.g., "eip155:8453", "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp") */
-  network: string;
-  /** Payment details */
-  payload: {
-    /** Signature of the payment */
-    signature: string;
-    /** Payment authorization */
-    authorization: PaymentAuthorization;
+  /** Optional resource being paid for */
+  resource?: {
+    /** Resource URL */
+    url: string;
+    /** Human-readable description */
+    description?: string;
+    /** MIME type of resource */
+    mimeType?: string;
   };
-  /** Optional nested payment requirements for v2 format */
-  accepted?: PaymentRequirementsV2;
+  /** Accepted payment requirements (contains scheme, network, amount, etc.) */
+  accepted: {
+    /** Payment scheme (e.g., "exact") */
+    scheme: string;
+    /** Network identifier - CAIP-2 format (e.g., "eip155:8453") */
+    network: string;
+    /** Token/asset address */
+    asset: string;
+    /** Amount in base units */
+    amount: string;
+    /** Recipient address */
+    payTo: string;
+    /** Maximum timeout in seconds */
+    maxTimeoutSeconds: number;
+    /** Extra data */
+    extra?: Record<string, unknown>;
+  };
+  /** Payment details (signature, authorization, etc.) */
+  payload: Record<string, unknown>;
+  /** Optional extensions */
+  extensions?: Record<string, unknown>;
 }
 
 /**
