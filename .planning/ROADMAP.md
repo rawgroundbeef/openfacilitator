@@ -34,10 +34,10 @@ See: milestones/v1.0-ROADMAP.md for archived v1.0 phase details.
   2. TypeScript recognizes `x402Version: 2` literal as PaymentPayloadV2
   3. PaymentPayload union correctly narrows when version is checked
   4. PaymentRequirements types align with both payload versions
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 12-01: [TBD during planning]
+- [ ] 12-01-PLAN.md — Define PaymentPayloadV1/V2 and PaymentRequirementsV1/V2 with discriminated unions
 
 ### Phase 13: SDK Type Guards & Utilities
 **Goal**: Consumers have runtime utilities to safely handle versioned payloads
@@ -87,7 +87,7 @@ Plans:
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 12. SDK Type Definitions | v1.1 | 0/TBD | Not started | - |
+| 12. SDK Type Definitions | v1.1 | 0/1 | Planned | - |
 | 13. SDK Type Guards & Utilities | v1.1 | 0/TBD | Not started | - |
 | 14. SDK Method Updates | v1.1 | 0/TBD | Not started | - |
 | 15. Refund Documentation | v1.1 | 0/TBD | Not started | - |
