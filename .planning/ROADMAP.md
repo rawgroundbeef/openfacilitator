@@ -3,7 +3,7 @@
 ## Milestones
 
 - [x] **v1.0 MVP** - Phases 1-11 (shipped 2026-01-20)
-- [ ] **v1.1 SDK & Docs** - Phases 12-15 (in progress)
+- [ ] **v1.1 SDK & Docs** - Phases 12-16 (in progress)
 
 ## Phases
 
@@ -18,10 +18,11 @@ See: milestones/v1.0-ROADMAP.md for archived v1.0 phase details.
 
 **Milestone Goal:** SDK supports x402 v2 format with type-safe discrimination; merchants have refund documentation.
 
-- [ ] **Phase 12: SDK Type Definitions** - Define versioned PaymentPayload and PaymentRequirements types
+- [x] **Phase 12: SDK Type Definitions** - Define versioned PaymentPayload and PaymentRequirements types
 - [ ] **Phase 13: SDK Type Guards & Utilities** - Type guards and helper functions for version handling
 - [ ] **Phase 14: SDK Method Updates** - Update verify/settle methods and exports
 - [ ] **Phase 15: Refund Documentation** - Comprehensive refund guide for merchants
+- [ ] **Phase 16: Investigate Whitelabel Volume Tracking** - Debug why user with 2 white-labeled facilitators sees no volume on rewards page
 
 ## Phase Details
 
@@ -37,7 +38,7 @@ See: milestones/v1.0-ROADMAP.md for archived v1.0 phase details.
 **Plans**: 1 plan
 
 Plans:
-- [ ] 12-01-PLAN.md — Define PaymentPayloadV1/V2 and PaymentRequirementsV1/V2 with discriminated unions
+- [x] 12-01-PLAN.md — Define PaymentPayloadV1/V2 and PaymentRequirementsV1/V2 with discriminated unions
 
 ### Phase 13: SDK Type Guards & Utilities
 **Goal**: Consumers have runtime utilities to safely handle versioned payloads
@@ -81,13 +82,26 @@ Plans:
 Plans:
 - [ ] 15-01: [TBD during planning]
 
+### Phase 16: Investigate Whitelabel Volume Tracking
+**Goal**: Identify and fix why users with white-labeled facilitators see no volume tracked on rewards page
+**Depends on**: Nothing (bug investigation, independent)
+**Requirements**: TBD
+**Success Criteria** (what must be TRUE):
+  1. Root cause identified for missing volume tracking
+  2. White-labeled facilitator volume correctly attributed to owner
+  3. Rewards page displays accurate volume for users with multiple facilitators
+**Plans**: TBD
+
+Plans:
+- [ ] 16-01: [TBD during planning]
+
 ## Progress
 
 **Execution Order:** 12 -> 13 -> 14 -> 15 (13 depends on 12, 14 depends on 13, 15 is independent)
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
-| 12. SDK Type Definitions | v1.1 | 0/1 | Planned | - |
+| 12. SDK Type Definitions | v1.1 | 1/1 | ✓ Complete | 2026-01-20 |
 | 13. SDK Type Guards & Utilities | v1.1 | 0/TBD | Not started | - |
 | 14. SDK Method Updates | v1.1 | 0/TBD | Not started | - |
 | 15. Refund Documentation | v1.1 | 0/TBD | Not started | - |

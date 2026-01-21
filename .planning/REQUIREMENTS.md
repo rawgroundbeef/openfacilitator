@@ -9,15 +9,15 @@ Requirements for SDK v2 compliance and refund documentation.
 
 ### SDK Types
 
-- [ ] **SDK-01**: PaymentPayloadV1 interface with literal `x402Version: 1` discriminant
-- [ ] **SDK-02**: PaymentPayloadV2 interface with literal `x402Version: 2` and nested `accepted` field
-- [ ] **SDK-03**: Union type `PaymentPayload = PaymentPayloadV1 | PaymentPayloadV2`
+- [x] **SDK-01**: PaymentPayloadV1 interface with literal `x402Version: 1` discriminant
+- [x] **SDK-02**: PaymentPayloadV2 interface with literal `x402Version: 2` and nested `accepted` field
+- [x] **SDK-03**: Union type `PaymentPayload = PaymentPayloadV1 | PaymentPayloadV2`
 - [ ] **SDK-04**: Type guard `isPaymentPayloadV1()` for runtime discrimination
 - [ ] **SDK-05**: Type guard `isPaymentPayloadV2()` for runtime discrimination
 - [ ] **SDK-06**: Helper function `getSchemeNetwork()` extracts scheme/network regardless of version
 - [ ] **SDK-07**: Export all new types from package index
 - [ ] **SDK-08**: `assertNever` utility for exhaustive version checking
-- [ ] **SDK-09**: PaymentRequirementsV1 and PaymentRequirementsV2 types with union
+- [x] **SDK-09**: PaymentRequirementsV1 and PaymentRequirementsV2 types with union
 - [ ] **SDK-10**: Update `verify()` method to handle both v1 and v2 formats using getSchemeNetwork
 - [ ] **SDK-11**: Update `settle()` method to handle both v1 and v2 formats using getSchemeNetwork
 - [ ] **SDK-12**: Update request body construction to pass correct format to facilitator endpoints
@@ -55,15 +55,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SDK-01 | Phase 12 | Pending |
-| SDK-02 | Phase 12 | Pending |
-| SDK-03 | Phase 12 | Pending |
+| SDK-01 | Phase 12 | Complete |
+| SDK-02 | Phase 12 | Complete |
+| SDK-03 | Phase 12 | Complete |
 | SDK-04 | Phase 13 | Pending |
 | SDK-05 | Phase 13 | Pending |
 | SDK-06 | Phase 13 | Pending |
 | SDK-07 | Phase 14 | Pending |
 | SDK-08 | Phase 13 | Pending |
-| SDK-09 | Phase 12 | Pending |
+| SDK-09 | Phase 12 | Complete |
 | SDK-10 | Phase 14 | Pending |
 | SDK-11 | Phase 14 | Pending |
 | SDK-12 | Phase 14 | Pending |
