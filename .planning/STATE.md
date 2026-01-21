@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-01-20)
 
 Milestone: v1.1 SDK & Docs
 Phase: 13 of 16 (SDK Type Guards & Utilities)
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-01-20 — Phase 12 complete
+Plan: 1 of 1 complete
+Status: Phase complete
+Last activity: 2026-01-21 — Completed 13-01-PLAN.md
 
-Progress: [###########.........] 75% (v1.0 + Phase 12 complete)
+Progress: [############........] 80% (v1.0 + Phases 12-13 complete)
 
 ## Performance Metrics
 
@@ -26,16 +26,16 @@ Progress: [###########.........] 75% (v1.0 + Phase 12 complete)
 - Phases: 11
 
 **v1.1:**
-- Plans completed: 1
-- Average duration: 2m 21s
-- Total execution time: 2m 21s
-- Phases: 1 (Phase 12 complete)
+- Plans completed: 2
+- Average duration: 1m 55s
+- Total execution time: 3m 49s
+- Phases: 2 (Phases 12-13 complete)
 
 ## Accumulated Context
 
 ### Roadmap Evolution
 
-- Phase 16 added: $OPEN Rewards Homepage Section
+- Phase 16 added: Investigate Whitelabel Volume Tracking
 
 ### Decisions
 
@@ -46,6 +46,12 @@ v1.0 decisions archived in milestones/v1.0-ROADMAP.md.
 - Literal types (1, 2) for x402Version enable TypeScript narrowing
 - PaymentRequirements discriminated by field presence (maxAmountRequired vs amount)
 - Union type exports maintain backward compatibility
+
+**Phase 13 (SDK Type Guards & Utilities):**
+- PaymentPayload guards check x402Version discriminant (v1=1, v2=2)
+- PaymentRequirements guards use field presence (maxAmountRequired for V1, amount without maxAmountRequired for V2)
+- getVersion returns literal type 1 | 2 (not number) for switch exhaustiveness
+- All guards accept unknown type and safely handle null/undefined
 
 ### Pending Todos
 
@@ -60,6 +66,6 @@ v1.0 decisions archived in milestones/v1.0-ROADMAP.md.
 
 ## Session Continuity
 
-Last session: 2026-01-20
-Stopped at: Phase 12 (SDK Type Definitions) verified and complete
-Resume with: `/gsd:discuss-phase 13` or `/gsd:plan-phase 13`
+Last session: 2026-01-21
+Stopped at: Phase 13 (SDK Type Guards & Utilities) verified and complete
+Resume with: `/gsd:discuss-phase 14` or `/gsd:plan-phase 14`
