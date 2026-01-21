@@ -58,6 +58,8 @@ export function getVolumeByFacilitatorOwnership(
   sinceDate: string
 ): { volume: string; unique_payers: number } {
   const db = getDatabase();
+  // owner_address is stored lowercase in facilitators table
+  const normalizedUserId = userId.toLowerCase();
 
   const stmt = db.prepare(`
     SELECT
@@ -72,7 +74,7 @@ export function getVolumeByFacilitatorOwnership(
       AND t.created_at >= ?
   `);
 
-  const result = stmt.get(userId, sinceDate) as {
+  const result = stmt.get(normalizedUserId, sinceDate) as {
     volume: number;
     unique_payers: number;
   };
@@ -106,6 +108,8 @@ export function getUserTotalVolume(
   last_snapshot_date: string | null;
 } {
   const db = getDatabase();
+  // owner_address is stored lowercase in facilitators table
+  const normalizedUserId = userId.toLowerCase();
 
   // Get snapshot totals from existing function
   const snapshotData = getUserVolumeForCampaign(userId, campaignId);
@@ -184,7 +188,7 @@ export function getUserTotalVolume(
         AND t.created_at >= ?
     `);
     const liveFacilitatorResult = liveFacilitatorStmt.get(
-      userId,
+      normalizedUserId,
       sinceDate,
       facilitatorEnrollmentResult.enrollment_date
     ) as {
