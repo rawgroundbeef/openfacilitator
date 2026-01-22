@@ -11,17 +11,17 @@ See: .planning/PROJECT.md (updated 2026-01-22)
 
 Milestone: v1.2 Subscription Wallet Overhaul
 Phase: 17 - UI Cleanup & Subscriptions Section
-Plan: 2 of 3 in current phase
-Status: In progress
-Last activity: 2026-01-22 — Completed 17-02-PLAN.md
+Plan: 3 of 3 in current phase
+Status: Phase complete
+Last activity: 2026-01-22 — Completed 17-03-PLAN.md
 
-Progress: [██░░░░░░░░░░░░░░░░░░] 10%
+Progress: [███░░░░░░░░░░░░░░░░░] 15%
 
 ## Phase Summary
 
 | Phase | Name | Requirements | Status |
 |-------|------|--------------|--------|
-| 17 | UI Cleanup & Subscriptions Section | 8 | In progress (2/3 plans) |
+| 17 | UI Cleanup & Subscriptions Section | 8 | Complete (3/3 plans) |
 | 18 | Multi-Chain Wallet Infrastructure | 4 | Pending |
 | 19 | Chain Preference Logic | 3 | Pending |
 | 20 | Recurring Payment Engine | 6 | Pending |
@@ -42,13 +42,14 @@ Progress: [██░░░░░░░░░░░░░░░░░░] 10%
 - Phases: 5 (Phases 12-16 complete)
 
 **v1.2 Velocity:**
-- Plans completed: 2
-- Average duration: 2m
+- Plans completed: 3
+- Average duration: 2m 14s
+- Total execution time: 6m 42s
 - Phases: 5 (Phases 17-21 planned)
 
 **Cumulative:**
-- Total plans: 24
-- Total phases: 21 (16 complete, 5 planned)
+- Total plans: 27
+- Total phases: 21 (17 complete, 4 pending)
 - Milestones shipped: 2
 
 ## Accumulated Context
@@ -66,12 +67,14 @@ See PROJECT.md Key Decisions table for full history.
 v1.0 decisions archived in milestones/v1.0-ROADMAP.md.
 v1.1 decisions archived in milestones/v1.1-ROADMAP.md.
 
-v1.2 pending decisions:
+v1.2 decisions:
 - Show wallet addresses directly (power user friendly)
 - 7-day grace period (industry standard)
 - Pre-fund any amount (user flexibility)
 - No mid-cycle refunds (simplicity)
 - Prominent chain preference toggle (discoverability)
+- Four subscription states: active (green), pending (amber), inactive (red), never (gray)
+- Grace period detection (7 days) for pending state
 
 ### Pending Todos
 
@@ -85,11 +88,10 @@ v1.2 pending decisions:
 
 - **Pre-Launch:** Rewards wallet must be funded before claims go live (March 2026)
 - **Pre-Launch:** CRON_SECRET env var for volume snapshot cron jobs
-- **v1.2:** Legacy embedded wallet removal needs careful cleanup (Phase 17)
 - **v1.2:** Base wallet implementation alongside existing Solana (Phase 18)
 
 ## Session Continuity
 
-Last session: 2026-01-22T15:49:04Z
-Stopped at: Completed 17-02-PLAN.md
-Resume with: `/gsd:execute-phase 17`
+Last session: 2026-01-22T15:55:21Z
+Stopped at: Completed 17-03-PLAN.md (Phase 17 complete)
+Resume with: `/gsd:execute-phase 18`
