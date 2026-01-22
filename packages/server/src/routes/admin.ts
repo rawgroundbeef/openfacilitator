@@ -77,6 +77,11 @@ import {
   getResourceOwnerById,
 } from '../db/resource-owners.js';
 import {
+  getUserPreference,
+  upsertUserPreference,
+} from '../db/user-preferences.js';
+import { getSubscriptionsByUserId } from '../db/subscriptions.js';
+import {
   getRefundWalletBalance,
   getRefundWalletBalances,
   SUPPORTED_REFUND_NETWORKS,
@@ -381,6 +386,98 @@ router.get('/wallets/:chain/balance', requireAuth, async (req: Request, res: Res
   } catch (error) {
     console.error('Get wallet balance error:', error);
     res.status(500).json({ error: 'Failed to get balance' });
+  }
+});
+
+/**
+ * GET /api/admin/preference - Get user's chain preference
+ * Returns stored preference or calculates default from payment history and wallet balances
+ */
+router.get('/preference', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+
+    // Check for existing preference
+    const preference = getUserPreference(userId);
+
+    if (preference) {
+      return res.json({ preferredChain: preference.preferred_chain });
+    }
+
+    // Calculate default if no preference set
+    // Get payment history
+    const subscriptions = getSubscriptionsByUserId(userId);
+    const payments = subscriptions.map(s => ({
+      chain: 'solana', // Legacy payments were Solana-only
+      date: s.created_at,
+    }));
+
+    // Get wallet balances
+    const wallets = getAllWalletsForUser(userId);
+    const walletsWithBalances = await Promise.all(
+      wallets.map(async (w) => {
+        const balance = w.network === 'solana'
+          ? await getUSDCBalance(w.address)
+          : await getBaseUSDCBalance(w.address);
+        return {
+          network: w.network as 'base' | 'solana',
+          address: w.address,
+          balance: balance.formatted,
+          token: 'USDC',
+        };
+      })
+    );
+
+    // Determine default
+    let defaultChain: 'base' | 'solana' = 'solana';
+
+    // Check payments first
+    if (payments.length > 0) {
+      const sorted = [...payments].sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
+      const mostRecent = sorted[0].chain.toLowerCase();
+      if (mostRecent === 'base' || mostRecent === 'solana') {
+        defaultChain = mostRecent;
+      }
+    } else {
+      // Check balances
+      const baseWallet = walletsWithBalances.find(w => w.network === 'base');
+      const solanaWallet = walletsWithBalances.find(w => w.network === 'solana');
+      const baseBalance = baseWallet ? parseFloat(baseWallet.balance) : 0;
+      const solanaBalance = solanaWallet ? parseFloat(solanaWallet.balance) : 0;
+
+      if (baseBalance > solanaBalance) defaultChain = 'base';
+    }
+
+    return res.json({ preferredChain: defaultChain });
+  } catch (error) {
+    console.error('Error getting preference:', error);
+    return res.status(500).json({ error: 'Failed to get preference' });
+  }
+});
+
+/**
+ * PUT /api/admin/preference - Update user's chain preference
+ */
+router.put('/preference', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+    const { preferredChain } = req.body;
+
+    if (!preferredChain || !['base', 'solana'].includes(preferredChain)) {
+      return res.status(400).json({ error: 'Invalid preferredChain. Must be "base" or "solana".' });
+    }
+
+    const preference = upsertUserPreference(userId, preferredChain);
+
+    return res.json({
+      preferredChain: preference.preferred_chain,
+      updated: true,
+    });
+  } catch (error) {
+    console.error('Error updating preference:', error);
+    return res.status(500).json({ error: 'Failed to update preference' });
   }
 });
 

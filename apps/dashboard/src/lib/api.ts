@@ -233,6 +233,15 @@ export interface WalletBalanceResponse {
   token: string;
 }
 
+export interface ChainPreference {
+  preferredChain: 'base' | 'solana';
+}
+
+export interface ChainPreferenceUpdateResponse {
+  preferredChain: 'base' | 'solana';
+  updated: boolean;
+}
+
 export interface SubscriptionStatus {
   active: boolean;
   tier: 'starter' | 'basic' | 'pro' | null; // 'basic' and 'pro' for backwards compatibility
@@ -919,6 +928,18 @@ class ApiClient {
 
   async getSubscriptionHistory(): Promise<SubscriptionHistoryResponse> {
     return this.request('/api/subscriptions/history');
+  }
+
+  // Chain Preference
+  async getChainPreference(): Promise<ChainPreference> {
+    return this.request('/api/admin/preference');
+  }
+
+  async updateChainPreference(chain: 'base' | 'solana'): Promise<ChainPreferenceUpdateResponse> {
+    return this.request('/api/admin/preference', {
+      method: 'PUT',
+      body: JSON.stringify({ preferredChain: chain }),
+    });
   }
 
   // Products (x402 resources)
