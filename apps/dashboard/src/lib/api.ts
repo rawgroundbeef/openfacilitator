@@ -248,6 +248,17 @@ export interface SubscriptionStatus {
   expires: string | null;
 }
 
+export interface SubscriptionStatusResponse {
+  active: boolean;
+  tier: string | null;
+  expires: string | null;
+  state: 'active' | 'pending' | 'inactive' | 'never';
+  gracePeriod?: {
+    daysRemaining: number;
+    expiredAt: string;
+  };
+}
+
 export interface SubscriptionPayment {
   id: string;
   date: string;
@@ -256,6 +267,16 @@ export interface SubscriptionPayment {
   txHash: string | null;
   tier: string;
   expiresAt: string;
+}
+
+export interface SubscriptionPaymentAttempt {
+  id: string;
+  date: string;
+  amount: string;
+  chain: 'solana' | 'base';
+  status: 'success' | 'failed' | 'pending';
+  txHash: string | null;
+  isFallback: boolean;
 }
 
 export interface SubscriptionHistoryResponse {
@@ -928,6 +949,33 @@ class ApiClient {
 
   async getSubscriptionHistory(): Promise<SubscriptionHistoryResponse> {
     return this.request('/api/subscriptions/history');
+  }
+
+  async getSubscriptionPayments(limit?: number, offset?: number): Promise<{ payments: SubscriptionPaymentAttempt[]; total: number }> {
+    const params = new URLSearchParams();
+    if (limit) params.append('limit', limit.toString());
+    if (offset) params.append('offset', offset.toString());
+    const query = params.toString();
+    return this.request(`/api/subscriptions/payments${query ? `?${query}` : ''}`);
+  }
+
+  async reactivateSubscription(): Promise<{ success: boolean; error?: string; subscription?: { tier: string; expires: string } }> {
+    const response = await fetch(`${this.baseUrl}/api/subscriptions/reactivate`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: data.error || data.message || `HTTP ${response.status}`,
+      };
+    }
+
+    return data;
   }
 
   // Chain Preference

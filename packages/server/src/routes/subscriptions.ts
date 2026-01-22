@@ -7,11 +7,18 @@ import {
   extendSubscription,
   SUBSCRIPTION_PRICING,
   type SubscriptionTier,
+  getDueSubscriptions,
+  getGracePeriodInfo,
+  getUserSubscriptionState,
+  isInGracePeriod,
+  GRACE_PERIOD_DAYS,
 } from '../db/subscriptions.js';
+import { getSubscriptionPaymentsByUser } from '../db/subscription-payments.js';
 import { getUserWalletByUserId } from '../db/user-wallets.js';
 import { decryptPrivateKey } from '../utils/crypto.js';
 import { makeX402Payment } from '../services/x402-client.js';
 import { requireAuth } from '../middleware/auth.js';
+import { processSubscriptionPayment } from '../services/subscription-billing.js';
 
 // x402jobs payment endpoint
 const X402_JOBS_PAYMENT_URL = process.env.X402_JOBS_PAYMENT_URL || 'https://api.x402.jobs/@openfacilitator/openfacilitator-payment-collector';
@@ -27,12 +34,21 @@ router.get('/status', requireAuth, async (req: Request, res: Response) => {
     const userId = req.user!.id;
 
     const subscription = getActiveSubscription(userId);
+    const state = getUserSubscriptionState(userId);
+    const gracePeriodInfo = getGracePeriodInfo(userId);
 
     if (!subscription) {
       res.json({
         active: false,
         tier: null,
         expires: null,
+        state,
+        ...(gracePeriodInfo.inGracePeriod && {
+          gracePeriod: {
+            daysRemaining: gracePeriodInfo.daysRemaining,
+            expiredAt: gracePeriodInfo.expiredAt,
+          },
+        }),
       });
       return;
     }
@@ -41,6 +57,13 @@ router.get('/status', requireAuth, async (req: Request, res: Response) => {
       active: true,
       tier: subscription.tier,
       expires: subscription.expires_at,
+      state,
+      ...(gracePeriodInfo.inGracePeriod && {
+        gracePeriod: {
+          daysRemaining: gracePeriodInfo.daysRemaining,
+          expiredAt: gracePeriodInfo.expiredAt,
+        },
+      }),
     });
   } catch (error) {
     console.error('Get subscription status error:', error);
@@ -88,6 +111,42 @@ router.get('/history', requireAuth, async (req: Request, res: Response) => {
     res.json({ payments });
   } catch (error) {
     console.error('Get subscription history error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/subscriptions/payments
+ * Get detailed payment attempt history for authenticated user
+ * Returns all payment attempts including failures (from subscription_payments table)
+ */
+router.get('/payments', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.id;
+
+    // Parse query params
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+    const offset = parseInt(req.query.offset as string) || 0;
+
+    const payments = getSubscriptionPaymentsByUser(userId, limit, offset);
+
+    // Transform to frontend format
+    const formattedPayments = payments.map((payment) => ({
+      id: payment.id,
+      date: payment.created_at,
+      amount: (payment.amount / 1_000_000).toFixed(2), // Convert from USDC decimals
+      chain: payment.chain,
+      status: payment.status,
+      txHash: payment.tx_hash,
+      isFallback: payment.is_fallback,
+    }));
+
+    // Get total count for pagination
+    const total = payments.length;
+
+    res.json({ payments: formattedPayments, total });
+  } catch (error) {
+    console.error('Get subscription payments error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
