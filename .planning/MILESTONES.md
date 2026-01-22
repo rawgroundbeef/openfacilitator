@@ -1,5 +1,32 @@
 # Project Milestones: OpenFacilitator
 
+## v1.1 SDK & Docs (Shipped: 2026-01-21)
+
+**Delivered:** SDK x402 v2 type definitions with TypeScript narrowing, and comprehensive refund documentation for merchants.
+
+**Phases completed:** 12-16 (5 plans total)
+
+**Key accomplishments:**
+
+- SDK x402 v2 type definitions with discriminated unions and literal version discriminants
+- Runtime type guards (isPaymentPayloadV1/V2) and utilities (getSchemeNetwork, getVersion, assertNever)
+- verify() and settle() methods updated with backward-compatible version validation
+- Comprehensive refund documentation (331 lines) with reportFailure and withRefundProtection examples
+- Whitelabel facilitator volume tracking fix with automatic enrollment markers
+
+**Stats:**
+
+- 44 files changed
+- +2,990 / -589 lines
+- 5 phases, 5 plans
+- 2 days (2026-01-20 → 2026-01-21)
+
+**Git range:** `feat(12)` → `feat(16)`
+
+**What's next:** Dashboard polish, email notifications, Sybil detection dashboard
+
+---
+
 ## v1.0 Rewards Program (Shipped: 2026-01-20)
 
 **Delivered:** Complete token rewards program where users earn $OPEN tokens for payment volume processed through OpenFacilitator.

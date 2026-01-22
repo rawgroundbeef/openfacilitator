@@ -8,23 +8,17 @@ A rewards program that pays users $OPEN tokens (Solana SPL) for volume processed
 
 Users who process volume through OpenFacilitator get rewarded with $OPEN tokens. Hit threshold, get tokens. Own a white-label facilitator, get 2x.
 
-## Current Milestone: v1.1 SDK & Docs
-
-**Goal:** Update SDK for x402 v2 compliance and add refund documentation.
-
-**Target features:**
-- SDK PaymentPayload types for v1 and v2 formats
-- verify() and settle() methods handle both formats
-- Refund how-to guide for merchants
-
 ## Current State
 
-**Shipped:** v1.0 Rewards Program (2026-01-20)
+**Shipped:**
+- v1.0 Rewards Program (2026-01-20)
+- v1.1 SDK & Docs (2026-01-21)
 
 **Codebase:**
 - Dashboard: ~17,400 LOC TypeScript/React
 - Server: SQLite + Better Auth + Hono
-- 47 files added/modified for rewards feature
+- SDK: x402 v1 and v2 type support with TypeScript narrowing
+- 44 files changed in v1.1 (+2,990 / -589 lines)
 
 **Tech stack:**
 - Next.js 15.5 + React 19 + Tailwind + shadcn/ui
@@ -51,11 +45,11 @@ Users who process volume through OpenFacilitator get rewarded with $OPEN tokens.
 - ✓ Users can claim $OPEN tokens when threshold met — v1.0
 - ✓ SPL token transfer from rewards wallet on claim — v1.0
 - ✓ Claim history with transaction signatures — v1.0
-
-### Active
-
-- [ ] SDK V2 compliance — support x402 v2 PaymentPayload format
-- [ ] Refund user guide — how-to documentation for merchants
+- ✓ SDK x402 v2 type definitions with TypeScript narrowing — v1.1
+- ✓ Type guards for runtime version discrimination — v1.1
+- ✓ verify() and settle() handle v1 and v2 formats — v1.1
+- ✓ Comprehensive refund documentation for merchants — v1.1
+- ✓ Whitelabel facilitator volume tracking — v1.1
 
 ### Future
 
@@ -108,6 +102,11 @@ Users who process volume through OpenFacilitator get rewarded with $OPEN tokens.
 | Combined initiate + execute claim | Atomic operation, simpler UX | ✓ Good |
 | 5 address limit per user | Balance flexibility vs abuse prevention | ✓ Good |
 | Single active campaign | Simplicity, clear rules for users | ✓ Good |
+| Literal x402Version types (1, 2) | Enables TypeScript narrowing | ✓ Good |
+| PaymentRequirements field presence discrimination | No version field needed, use maxAmountRequired | ✓ Good |
+| getVersionSafe defaults to v1 | Backward compatibility with pre-versioning payloads | ✓ Good |
+| Middleware-first refund docs | Simpler DX for most merchants | ✓ Good |
+| Facilitator markers in reward_addresses | Reuses existing volume aggregation queries | ✓ Good |
 
 ---
-*Last updated: 2026-01-20 after v1.1 milestone started*
+*Last updated: 2026-01-21 after v1.1 milestone*
