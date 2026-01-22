@@ -302,8 +302,8 @@ export default function Home() {
             <p className="text-muted-foreground mb-4 text-balance">
               Get your volume tracked on x402 leaderboards, professional branding at pay.yourdomain.com, and full control.
             </p>
-            <Link 
-              href="/dashboard" 
+            <Link
+              href="/dashboard"
               className="inline-flex items-center justify-center gap-2 bg-primary text-primary-foreground px-5 py-2.5 rounded-lg hover:bg-primary/90 transition-colors font-medium"
             >
               Get your domain — $5/mo
@@ -446,7 +446,7 @@ export default function Home() {
                 <span className="text-3xl font-bold">$0</span>
                 <span className="text-muted-foreground">/forever</span>
               </div>
-              <ul className="space-y-2 text-sm">
+              <ul className="space-y-2 mb-6 text-sm">
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-primary" />
                   Shared endpoint
@@ -463,7 +463,16 @@ export default function Home() {
                   <Check className="w-4 h-4 text-primary" />
                   Unlimited requests
                 </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-primary" />
+                  <Link href="/rewards" className="hover:text-primary transition-colors">
+                    Earn $OPEN rewards
+                  </Link>
+                </li>
               </ul>
+              <GetStartedButton
+                className="block w-full py-2.5 rounded-lg border border-border hover:bg-secondary text-center font-medium transition-colors text-sm"
+              />
             </div>
 
             {/* Starter */}
@@ -489,6 +498,12 @@ export default function Home() {
                 <li className="flex items-center gap-2">
                   <Check className="w-4 h-4 text-primary" />
                   Manage your keys
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-primary" />
+                  <Link href="/rewards" className="hover:text-primary transition-colors">
+                    Earn $OPEN rewards (2x bonus)
+                  </Link>
                 </li>
               </ul>
               <GetStartedButton
