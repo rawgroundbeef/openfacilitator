@@ -272,6 +272,8 @@ export interface SubscriptionStatusResponse {
   tier: string | null;
   expires: string | null;
   state: 'active' | 'pending' | 'inactive' | 'never';
+  facilitatorCount: number;
+  monthlyCost: number;
   gracePeriod?: {
     daysRemaining: number;
     expiredAt: string;

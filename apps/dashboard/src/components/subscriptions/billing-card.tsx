@@ -15,6 +15,10 @@ export function BillingCard({ subscription }: BillingCardProps) {
     ? formatDate(subscription.expires)
     : null;
 
+  const facilitatorCount = subscription?.facilitatorCount || 0;
+  const monthlyCost = subscription?.monthlyCost || 0;
+  const costPerFacilitator = 5; // $5 per facilitator
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -29,8 +33,14 @@ export function BillingCard({ subscription }: BillingCardProps) {
           <div>
             <p className="text-sm text-muted-foreground">Subscription Cost</p>
             <p className="text-lg font-semibold">
-              $5<span className="text-sm font-normal text-muted-foreground">/month</span>
+              ${monthlyCost > 0 ? monthlyCost : costPerFacilitator}
+              <span className="text-sm font-normal text-muted-foreground">/month</span>
             </p>
+            {facilitatorCount > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {facilitatorCount} facilitator{facilitatorCount !== 1 ? 's' : ''} × ${costPerFacilitator}
+              </p>
+            )}
           </div>
         </div>
 
@@ -42,11 +52,14 @@ export function BillingCard({ subscription }: BillingCardProps) {
           <div>
             <p className="text-sm text-muted-foreground">Next Billing Date</p>
             <p className="text-lg font-semibold">
-              {hasSubscription && nextBillingDate
+              {nextBillingDate
                 ? nextBillingDate
                 : <span className="text-muted-foreground font-normal">—</span>
               }
             </p>
+            {facilitatorCount > 0 && (
+              <p className="text-xs text-muted-foreground">Billed monthly per facilitator</p>
+            )}
           </div>
         </div>
 

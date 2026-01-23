@@ -3,12 +3,11 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Menu, X, Trophy } from 'lucide-react';
+import { Menu, X, Trophy, Github, FileText } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/components/auth/auth-provider';
 import { UserMenu } from '@/components/user-menu';
 import { NotificationBell } from '@/components/notifications/notification-bell';
-import { ThemeToggle } from '@/components/theme-toggle';
 import { api } from '@/lib/api';
 
 function formatTokenAmount(amount: string): string {
@@ -88,43 +87,52 @@ export function Navbar() {
 
       <nav className={`fixed w-full z-50 border-b border-border/50 backdrop-blur-xl bg-background/80 ${showBanner ? 'top-10' : 'top-0'}`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-        {/* Logo - always visible */}
+        {/* Logo */}
         <Link href="/" className="flex items-center gap-2.5" onClick={closeMobileMenu}>
           <img src="/icon.svg" alt="" className="w-9 h-9" />
           <span className="font-bold text-xl tracking-tight">OpenFacilitator</span>
         </Link>
 
         {/* Desktop nav - hidden on mobile */}
-        <div className="hidden md:flex items-center space-x-8">
+        <div className="hidden md:flex items-center gap-1">
+          <a
+            href="https://www.coingecko.com/en/coins/openfacilitator"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-2.5 py-1.5 rounded-lg text-xs font-mono text-gray-500 hover:text-gray-900 hover:bg-muted/50 dark:text-gray-500 dark:hover:text-gray-100 transition-colors"
+            title="$OPEN on CoinGecko"
+          >
+            $OPEN
+          </a>
           <Link
             href="/docs"
-            className={`text-sm transition-colors ${
+            className={`p-2 rounded-lg transition-colors ${
               isDocsPage
-                ? 'text-gray-900 dark:text-gray-100 font-medium'
-                : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
+                ? 'text-gray-900 dark:text-gray-100 bg-muted'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-muted/50 dark:text-gray-400 dark:hover:text-gray-100'
             }`}
+            title="Documentation"
           >
-            Docs
+            <FileText className="w-5 h-5" />
           </Link>
           <a
             href="https://github.com/rawgroundbeef/openfacilitator"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 transition-colors"
+            className="p-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-muted/50 dark:text-gray-400 dark:hover:text-gray-100 transition-colors"
+            title="GitHub"
           >
-            GitHub
+            <Github className="w-5 h-5" />
           </a>
-
-          <ThemeToggle />
 
           {/* Auth-aware section */}
           {isLoading ? (
             <div className="w-20 h-8 bg-muted rounded animate-pulse" />
           ) : isAuthenticated ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               <NotificationBell />
               {isAdmin && (
-                <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground font-medium">
+                <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground font-medium ml-1">
                   Admin
                 </span>
               )}
@@ -155,31 +163,38 @@ export function Navbar() {
       {mobileMenuOpen && (
         <div className="md:hidden border-t border-border/50 bg-background backdrop-blur-xl">
           <div className="max-w-7xl mx-auto px-4 py-4 space-y-1">
+            <a
+              href="https://www.coingecko.com/en/coins/openfacilitator"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-mono text-gray-600 hover:text-gray-900 hover:bg-muted dark:text-gray-400 dark:hover:text-gray-100 transition-colors"
+              onClick={closeMobileMenu}
+            >
+              $OPEN
+            </a>
+            <div className="border-t border-border/50 my-2" />
             <Link
               href="/docs"
-              className={`block px-3 py-3 rounded-lg text-sm transition-colors ${
+              className={`flex items-center gap-3 px-3 py-3 rounded-lg text-sm transition-colors ${
                 isDocsPage
                   ? 'bg-primary/10 text-primary font-medium'
                   : 'text-gray-600 hover:text-gray-900 hover:bg-muted dark:text-gray-400 dark:hover:text-gray-100'
               }`}
               onClick={closeMobileMenu}
             >
+              <FileText className="w-5 h-5" />
               Docs
             </Link>
             <a
               href="https://github.com/rawgroundbeef/openfacilitator"
               target="_blank"
               rel="noopener noreferrer"
-              className="block px-3 py-3 rounded-lg text-sm text-gray-600 hover:text-gray-900 hover:bg-muted dark:text-gray-400 dark:hover:text-gray-100 transition-colors"
+              className="flex items-center gap-3 px-3 py-3 rounded-lg text-sm text-gray-600 hover:text-gray-900 hover:bg-muted dark:text-gray-400 dark:hover:text-gray-100 transition-colors"
               onClick={closeMobileMenu}
             >
+              <Github className="w-5 h-5" />
               GitHub
             </a>
-            
-            <div className="flex items-center justify-between px-3 py-3">
-              <span className="text-sm text-gray-600 dark:text-gray-400">Theme</span>
-              <ThemeToggle />
-            </div>
 
             <div className="pt-2 border-t border-border/50">
               {isLoading ? (

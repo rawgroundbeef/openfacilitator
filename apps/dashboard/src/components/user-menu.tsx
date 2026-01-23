@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { User, LogOut, LayoutDashboard, CreditCard, Trophy, ChevronDown } from 'lucide-react';
+import { User, LogOut, LayoutDashboard, CreditCard, Trophy, ChevronDown, Sun, Moon, Monitor } from 'lucide-react';
+import { useTheme } from 'next-themes';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,18 +11,23 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuPortal,
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/components/auth/auth-provider';
 
 export function UserMenu() {
   const pathname = usePathname();
   const { user, signOut, hasClaimable } = useAuth();
+  const { theme, setTheme } = useTheme();
   const isOnDashboard = pathname === '/dashboard';
 
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
-        <button className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 focus:outline-none transition-colors">
+        <button className="flex items-center gap-1 p-2 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-muted/50 dark:text-gray-400 dark:hover:text-gray-100 focus:outline-none transition-colors">
           <User className="w-5 h-5" />
           <ChevronDown className="w-3 h-3" />
         </button>
@@ -55,6 +61,37 @@ export function UserMenu() {
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger className="cursor-pointer">
+            {theme === 'dark' ? (
+              <Moon className="w-4 h-4 mr-2" />
+            ) : theme === 'light' ? (
+              <Sun className="w-4 h-4 mr-2" />
+            ) : (
+              <Monitor className="w-4 h-4 mr-2" />
+            )}
+            Theme
+          </DropdownMenuSubTrigger>
+          <DropdownMenuPortal>
+            <DropdownMenuSubContent>
+              <DropdownMenuItem onClick={() => setTheme('light')} className="cursor-pointer">
+                <Sun className="w-4 h-4 mr-2" />
+                Light
+                {theme === 'light' && <span className="ml-auto text-primary">✓</span>}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setTheme('dark')} className="cursor-pointer">
+                <Moon className="w-4 h-4 mr-2" />
+                Dark
+                {theme === 'dark' && <span className="ml-auto text-primary">✓</span>}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setTheme('system')} className="cursor-pointer">
+                <Monitor className="w-4 h-4 mr-2" />
+                System
+                {theme === 'system' && <span className="ml-auto text-primary">✓</span>}
+              </DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuPortal>
+        </DropdownMenuSub>
         <DropdownMenuItem onClick={signOut} className="cursor-pointer">
           <LogOut className="w-4 h-4 mr-2" />
           Sign out

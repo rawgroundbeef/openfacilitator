@@ -8,7 +8,7 @@ import { Navbar } from '@/components/navbar';
 import { StatusCard } from '@/components/subscriptions/status-card';
 import { BillingCard } from '@/components/subscriptions/billing-card';
 import { PaymentHistory } from '@/components/subscriptions/payment-history';
-import { WalletCards } from '@/components/subscriptions/wallet-cards';
+import { WalletCards, ChainPreferenceToggle, useChainPreference } from '@/components/subscriptions/wallet-cards';
 import { useAuth } from '@/components/auth/auth-provider';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/lib/api';
@@ -18,6 +18,7 @@ export default function SubscriptionsPage() {
   const queryClient = useQueryClient();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
+  const { preference, isLoading: preferenceLoading, updatePreference, isUpdating } = useChainPreference();
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -151,10 +152,27 @@ export default function SubscriptionsPage() {
 
         {/* Wallet Cards Section */}
         <div className="mb-8">
-          <h2 className="text-lg font-semibold mb-4">Subscription Wallets</h2>
-          <p className="text-sm text-muted-foreground mb-4">
-            Fund these wallets with USDC to pay for your subscription. You can use either chain.
-          </p>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-lg font-semibold">Subscription Wallets</h2>
+              <p className="text-sm text-muted-foreground">
+                Fund these wallets with USDC to pay for your subscription.
+              </p>
+            </div>
+            {!preferenceLoading && (
+              <div className="flex flex-col items-end gap-1">
+                <ChainPreferenceToggle
+                  preference={preference}
+                  onChange={updatePreference}
+                  disabled={isUpdating}
+                  compact
+                />
+                <span className="text-xs text-muted-foreground">
+                  Payment source
+                </span>
+              </div>
+            )}
+          </div>
           <WalletCards />
         </div>
 

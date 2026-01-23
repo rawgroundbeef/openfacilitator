@@ -31,8 +31,8 @@ const statusConfig = {
   },
   never: {
     icon: AlertCircle,
-    label: 'Not Subscribed',
-    description: 'Subscribe to create facilitators',
+    label: 'No Facilitators',
+    description: 'Create a facilitator to start your subscription',
     className: 'text-gray-600 dark:text-gray-400',
     badgeClass: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400',
   },
@@ -77,7 +77,13 @@ export function StatusCard({
           </div>
         </div>
 
-        {state === 'active' && subscription?.expires && (
+        {state === 'active' && subscription?.facilitatorCount && subscription.facilitatorCount > 0 && (
+          <p className="text-sm text-muted-foreground">
+            {subscription.facilitatorCount} active facilitator{subscription.facilitatorCount !== 1 ? 's' : ''}
+          </p>
+        )}
+
+        {state === 'active' && subscription?.expires && !subscription?.facilitatorCount && (
           <p className="text-sm text-muted-foreground">
             Expires {new Date(subscription.expires).toLocaleDateString()}
           </p>
@@ -129,17 +135,8 @@ export function StatusCard({
         {state === 'never' && (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Start your subscription today
+              Each facilitator you create is a $5/month subscription
             </p>
-            {onSubscribe && (
-              <Button
-                onClick={onSubscribe}
-                className="w-full"
-                disabled={isSubscribing}
-              >
-                {isSubscribing ? 'Processing...' : 'Subscribe'}
-              </Button>
-            )}
           </div>
         )}
       </CardContent>

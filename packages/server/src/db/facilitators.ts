@@ -2,9 +2,11 @@ import { nanoid } from 'nanoid';
 import { getDatabase } from './index.js';
 import type { FacilitatorRecord } from './types.js';
 import { createFacilitatorMarker } from './reward-addresses.js';
+import { getActiveSubscription, createSubscription, extendSubscription } from './subscriptions.js';
 
 /**
  * Create a new facilitator
+ * Also creates/extends a subscription for the owner (each facilitator = $5/month)
  */
 export function createFacilitator(data: {
   name: string;
@@ -35,7 +37,30 @@ export function createFacilitator(data: {
       data.encrypted_private_key || null
     );
 
-    return getFacilitatorById(id);
+    const facilitator = getFacilitatorById(id);
+
+    // Create or extend subscription for the facilitator owner
+    // This ensures the billing cron will process their payment
+    if (facilitator) {
+      // Get the actual user ID from the database (preserves case for FK constraint)
+      const userStmt = db.prepare(`SELECT id FROM "user" WHERE LOWER(id) = ? LIMIT 1`);
+      const userRecord = userStmt.get(data.owner_address.toLowerCase()) as { id: string } | undefined;
+
+      if (userRecord) {
+        const userId = userRecord.id;
+        const existingSubscription = getActiveSubscription(userId);
+
+        if (!existingSubscription) {
+          // Create new subscription with 30-day expiration
+          // First payment is due immediately, so set expires to now + 30 days
+          const expiresAt = new Date();
+          expiresAt.setDate(expiresAt.getDate() + 30);
+          createSubscription(userId, 'starter', expiresAt, null, 0); // amount=0, no tx yet
+        }
+      }
+    }
+
+    return facilitator;
   } catch (error: unknown) {
     // Check for unique constraint violation
     if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
@@ -299,6 +324,40 @@ export function backfillFacilitatorMarkers(): number {
   for (const { owner_address } of owners) {
     const result = ensureFacilitatorMarker(owner_address);
     if (result) created++;
+  }
+
+  return created;
+}
+
+/**
+ * Backfill subscriptions for existing facilitator owners who don't have one
+ * Safe to run multiple times - only creates if no active subscription exists
+ * @returns Number of subscriptions created
+ */
+export function backfillFacilitatorSubscriptions(): number {
+  const db = getDatabase();
+
+  // Find all unique facilitator owners that have a valid user record
+  // Join with user table to ensure foreign key constraint is satisfied
+  const stmt = db.prepare(`
+    SELECT DISTINCT f.owner_address, u.id as user_id
+    FROM facilitators f
+    INNER JOIN "user" u ON LOWER(u.id) = f.owner_address
+  `);
+  const owners = stmt.all() as { owner_address: string; user_id: string }[];
+
+  let created = 0;
+  for (const { user_id } of owners) {
+    const existingSubscription = getActiveSubscription(user_id);
+
+    if (!existingSubscription) {
+      // Create subscription expiring in 30 days
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 30);
+      createSubscription(user_id, 'starter', expiresAt, null, 0);
+      created++;
+      console.log(`[Backfill] Created subscription for facilitator owner: ${user_id}`);
+    }
   }
 
   return created;

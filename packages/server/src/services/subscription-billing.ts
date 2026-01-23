@@ -21,6 +21,7 @@ import {
   createNotification,
   hasRecentNotificationOfType,
 } from '../db/notifications.js';
+import { getFacilitatorsByOwner } from '../db/facilitators.js';
 
 // x402jobs payment endpoint
 const X402_JOBS_PAYMENT_URL =
@@ -68,8 +69,19 @@ export async function processSubscriptionPayment(userId: string): Promise<Paymen
     };
   }
 
-  const requiredAmount = SUBSCRIPTION_PRICING.starter;
-  console.log(`[SubscriptionBilling] Required amount: ${requiredAmount} (${requiredAmount / 1e6} USDC)`);
+  // Calculate amount based on facilitator count
+  const facilitators = getFacilitatorsByOwner(userId);
+  const facilitatorCount = facilitators.length;
+
+  if (facilitatorCount === 0) {
+    console.log('[SubscriptionBilling] User has no facilitators, skipping billing');
+    return {
+      success: true, // Not an error, just nothing to bill
+    };
+  }
+
+  const requiredAmount = facilitatorCount * SUBSCRIPTION_PRICING.starter;
+  console.log(`[SubscriptionBilling] Required amount: ${requiredAmount} (${requiredAmount / 1e6} USDC) for ${facilitatorCount} facilitator(s)`);
 
   // Try preferred chain first (if wallet exists)
   if (preferredWallet) {
@@ -277,11 +289,12 @@ async function attemptPayment(
     );
 
     // Create payment success notification
+    const amountDollars = amount / 1_000_000;
     createNotification(
       userId,
       'payment_success',
       'Payment Successful',
-      `Your $5 subscription payment was processed successfully.`,
+      `Your $${amountDollars} subscription payment was processed successfully.`,
       'success',
       { txHash: paymentResult.txHash, chain, amount }
     );

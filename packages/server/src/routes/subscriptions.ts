@@ -14,6 +14,7 @@ import {
   GRACE_PERIOD_DAYS,
   getSubscriptionsExpiringInDays,
 } from '../db/subscriptions.js';
+import { getFacilitatorsByOwner } from '../db/facilitators.js';
 import {
   createNotification,
   hasRecentNotificationOfType,
@@ -33,11 +34,47 @@ const router: IRouter = Router();
 /**
  * GET /api/subscriptions/status
  * Get subscription status for authenticated user
+ *
+ * Subscription status is derived from facilitator ownership:
+ * - Each facilitator = $5/month subscription
+ * - If user owns facilitators, they are subscribed
  */
 router.get('/status', requireAuth, async (req: Request, res: Response) => {
   try {
     const userId = req.user!.id;
 
+    // Check facilitators owned by user (facilitators store owner_address as lowercase)
+    const facilitators = getFacilitatorsByOwner(userId);
+    const facilitatorCount = facilitators.length;
+
+    // If user has facilitators, they are subscribed
+    if (facilitatorCount > 0) {
+      // SUBSCRIPTION_PRICING.starter is in USDC decimals (5_000_000 = $5)
+      // Convert to dollars for frontend display
+      const monthlyCost = (facilitatorCount * SUBSCRIPTION_PRICING.starter) / 1_000_000;
+
+      // Get the subscription record (created when facilitator was made)
+      const subscription = getActiveSubscription(userId);
+      const gracePeriodInfo = getGracePeriodInfo(userId);
+
+      res.json({
+        active: true,
+        tier: 'starter',
+        expires: subscription?.expires_at || null, // Next billing date
+        state: gracePeriodInfo.inGracePeriod ? 'pending' : 'active',
+        facilitatorCount,
+        monthlyCost,
+        ...(gracePeriodInfo.inGracePeriod && {
+          gracePeriod: {
+            daysRemaining: gracePeriodInfo.daysRemaining,
+            expiredAt: gracePeriodInfo.expiredAt,
+          },
+        }),
+      });
+      return;
+    }
+
+    // Fall back to traditional subscription check for users without facilitators
     const subscription = getActiveSubscription(userId);
     const state = getUserSubscriptionState(userId);
     const gracePeriodInfo = getGracePeriodInfo(userId);
@@ -48,6 +85,8 @@ router.get('/status', requireAuth, async (req: Request, res: Response) => {
         tier: null,
         expires: null,
         state,
+        facilitatorCount: 0,
+        monthlyCost: 0,
         ...(gracePeriodInfo.inGracePeriod && {
           gracePeriod: {
             daysRemaining: gracePeriodInfo.daysRemaining,
@@ -63,6 +102,8 @@ router.get('/status', requireAuth, async (req: Request, res: Response) => {
       tier: subscription.tier,
       expires: subscription.expires_at,
       state,
+      facilitatorCount: 0,
+      monthlyCost: SUBSCRIPTION_PRICING.starter,
       ...(gracePeriodInfo.inGracePeriod && {
         gracePeriod: {
           daysRemaining: gracePeriodInfo.daysRemaining,
