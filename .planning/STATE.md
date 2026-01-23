@@ -111,6 +111,6 @@ v1.2 decisions:
 
 ## Session Continuity
 
-Last session: 2026-01-22 21:30 UTC
-Stopped at: Completed 20-04-PLAN.md (Phase 20 complete - gap closure)
-Resume file: None
+Last session: 2026-01-22
+Stopped at: Phase 20 verified and complete
+Resume with: `/gsd:discuss-phase 21`

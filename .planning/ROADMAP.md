@@ -104,12 +104,13 @@ Plans:
 
 **Requirements:** RECR-01, RECR-02, RECR-03, RECR-04, RECR-05, RECR-06
 
-**Plans:** 3 plans
+**Plans:** 4 plans
 
 Plans:
-- [ ] 20-01-PLAN.md — Payment database layer and billing service with fallback logic
-- [ ] 20-02-PLAN.md — Billing cron endpoint and grace period management
-- [ ] 20-03-PLAN.md — Frontend grace period UI, CSV export, enhanced payment history
+- [x] 20-01-PLAN.md — Payment database layer and billing service with fallback logic
+- [x] 20-02-PLAN.md — Billing cron endpoint and grace period management
+- [x] 20-03-PLAN.md — Frontend grace period UI, CSV export, enhanced payment history
+- [x] 20-04-PLAN.md — Base chain x402 payment support (gap closure)
 
 **Success Criteria:**
 
@@ -145,11 +146,11 @@ Plans:
 | 17 | UI Cleanup & Subscriptions Section | 8 | Complete |
 | 18 | Multi-Chain Wallet Infrastructure | 4 | Complete |
 | 19 | Chain Preference Logic | 3 | Complete |
-| 20 | Recurring Payment Engine | 6 | Pending |
+| 20 | Recurring Payment Engine | 6 | Complete |
 | 21 | Notifications & Edge Cases | 4 | Pending |
 
 **Total:** 25 requirements across 5 phases
 
 ---
 *Roadmap created: 2026-01-22*
-*Last updated: 2026-01-22 — Phase 20 planned (3 plans)*
+*Last updated: 2026-01-22 — Phase 20 complete (4 plans)*

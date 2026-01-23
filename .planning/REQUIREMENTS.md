@@ -36,12 +36,12 @@ Requirements for Subscription Wallet Overhaul milestone.
 
 ### Recurring Payment Engine
 
-- [ ] **RECR-01**: Daily billing cron job queries due subscriptions
-- [ ] **RECR-02**: Auto-deduction from preferred chain wallet
-- [ ] **RECR-03**: Fallback to alternate chain if preferred insufficient
-- [ ] **RECR-04**: 7-day grace period before service suspension
-- [ ] **RECR-05**: Payment marked "pending" when both wallets insufficient
-- [ ] **RECR-06**: All subscription payments logged with tx details
+- [x] **RECR-01**: Daily billing cron job queries due subscriptions
+- [x] **RECR-02**: Auto-deduction from preferred chain wallet
+- [x] **RECR-03**: Fallback to alternate chain if preferred insufficient
+- [x] **RECR-04**: 7-day grace period before service suspension
+- [x] **RECR-05**: Payment marked "pending" when both wallets insufficient
+- [x] **RECR-06**: All subscription payments logged with tx details
 
 ### Notifications
 
@@ -95,12 +95,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PREF-01 | Phase 19 | Complete |
 | PREF-02 | Phase 19 | Complete |
 | PREF-03 | Phase 19 | Complete |
-| RECR-01 | Phase 20 | Pending |
-| RECR-02 | Phase 20 | Pending |
-| RECR-03 | Phase 20 | Pending |
-| RECR-04 | Phase 20 | Pending |
-| RECR-05 | Phase 20 | Pending |
-| RECR-06 | Phase 20 | Pending |
+| RECR-01 | Phase 20 | Complete |
+| RECR-02 | Phase 20 | Complete |
+| RECR-03 | Phase 20 | Complete |
+| RECR-04 | Phase 20 | Complete |
+| RECR-05 | Phase 20 | Complete |
+| RECR-06 | Phase 20 | Complete |
 | NOTF-01 | Phase 21 | Pending |
 | NOTF-02 | Phase 21 | Pending |
 | NOTF-03 | Phase 21 | Pending |
