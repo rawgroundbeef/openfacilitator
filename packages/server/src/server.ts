@@ -7,6 +7,7 @@ import { publicRouter } from './routes/public.js';
 import { toNodeHandler } from 'better-auth/node';
 import { getAuth } from './auth/index.js';
 import { subscriptionsRouter } from './routes/subscriptions.js';
+import { notificationsRouter } from './routes/notifications.js';
 import { statsRouter } from './routes/stats.js';
 import { discoveryRouter } from './routes/discovery.js';
 import { internalWebhooksRouter } from './routes/internal-webhooks.js';
@@ -83,6 +84,9 @@ export function createServer(): Express {
 
   // Subscription routes (for Memeputer agent integration)
   app.use('/api/subscriptions', subscriptionsRouter);
+
+  // Notifications routes (user notifications for payment events, warnings, etc.)
+  app.use('/api/notifications', notificationsRouter);
 
   // Internal webhooks (for dogfooding - subscription activation, etc.)
   app.use('/api/internal/webhooks', internalWebhooksRouter);
