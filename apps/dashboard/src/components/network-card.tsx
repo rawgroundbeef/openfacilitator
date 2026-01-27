@@ -28,7 +28,7 @@ export interface NetworkConfig {
   v1Id: string;
   v2Id: string;
   name: string;
-  type: 'evm' | 'solana';
+  type: 'evm' | 'solana' | 'stacks';
   chainId?: number;
   testnet: boolean;
 }
@@ -150,6 +150,22 @@ export const SUPPORTED_NETWORKS: NetworkConfig[] = [
     type: 'solana',
     testnet: true,
   },
+
+  // ============ Stacks ============
+  {
+    v1Id: 'stacks',
+    v2Id: 'stacks:1',
+    name: 'Stacks',
+    type: 'stacks',
+    testnet: false,
+  },
+  {
+    v1Id: 'stacks-testnet',
+    v2Id: 'stacks:2147483648',
+    name: 'Stacks Testnet',
+    type: 'stacks',
+    testnet: true,
+  },
 ];
 
 // Helper functions
@@ -157,6 +173,7 @@ export const getMainnets = () => SUPPORTED_NETWORKS.filter(n => !n.testnet);
 export const getTestnets = () => SUPPORTED_NETWORKS.filter(n => n.testnet);
 export const getEvmNetworks = () => SUPPORTED_NETWORKS.filter(n => n.type === 'evm');
 export const getSolanaNetworks = () => SUPPORTED_NETWORKS.filter(n => n.type === 'solana');
+export const getStacksNetworks = () => SUPPORTED_NETWORKS.filter(n => n.type === 'stacks');
 
 // Explorer URLs
 const EXPLORER_URLS: Record<string, string> = {
@@ -177,11 +194,17 @@ const EXPLORER_URLS: Record<string, string> = {
   // Solana
   solana: 'https://solscan.io',
   'solana-devnet': 'https://solscan.io',
+  // Stacks
+  stacks: 'https://explorer.stacks.co',
+  'stacks-testnet': 'https://explorer.stacks.co/?chain=testnet',
 };
 
-export function getExplorerAddressUrl(type: 'evm' | 'solana', address: string): string {
+export function getExplorerAddressUrl(type: 'evm' | 'solana' | 'stacks', address: string): string {
   if (type === 'solana') {
     return `https://solscan.io/account/${address}`;
+  }
+  if (type === 'stacks') {
+    return `https://explorer.stacks.co/address/${address}?chain=mainnet`;
   }
   return `https://basescan.org/address/${address}`;
 }
@@ -190,6 +213,7 @@ export function getExplorerAddressUrl(type: 'evm' | 'solana', address: string): 
 const LOW_BALANCE_THRESHOLDS = {
   evm: 0.01,    // ETH
   solana: 0.05, // SOL
+  stacks: 0.5,  // STX
 };
 
 export interface WalletInfo {
@@ -230,7 +254,7 @@ export function NetworkPill({ network, active }: NetworkPillProps) {
 
 // Wallet Type Card Component
 interface WalletTypeCardProps {
-  type: 'evm' | 'solana';
+  type: 'evm' | 'solana' | 'stacks';
   title: string;
   subtitle: string;
   wallet: WalletInfo | null;
@@ -283,8 +307,8 @@ export function WalletTypeCard({
     setIsImportOpen(false);
   };
 
-  const icon = type === 'evm' ? '🔷' : '🟣';
-  const nativeSymbol = type === 'evm' ? 'ETH' : 'SOL';
+  const icon = type === 'evm' ? '🔷' : type === 'solana' ? '🟣' : '⚡';
+  const nativeSymbol = type === 'evm' ? 'ETH' : type === 'solana' ? 'SOL' : 'STX';
 
   return (
     <Card className={hasWallet && balanceStatus === 'ok' ? 'border-green-500/30' : ''}>
@@ -399,7 +423,9 @@ export function WalletTypeCard({
                     <DialogDescription>
                       {type === 'evm'
                         ? 'Enter your private key (0x-prefixed hex). It will be encrypted and stored securely.'
-                        : 'Enter your Solana private key (base58 encoded). It will be encrypted and stored securely.'}
+                        : type === 'solana'
+                        ? 'Enter your Solana private key (base58 encoded). It will be encrypted and stored securely.'
+                        : 'Enter your Stacks private key (64 hex characters). It will be encrypted and stored securely.'}
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4 py-4">
@@ -408,14 +434,16 @@ export function WalletTypeCard({
                       <Input
                         id={`import-${type}`}
                         type="password"
-                        placeholder={type === 'evm' ? '0x...' : 'base58 encoded key...'}
+                        placeholder={type === 'evm' ? '0x...' : type === 'solana' ? 'base58 encoded key...' : '64 hex characters...'}
                         value={importKey}
                         onChange={(e) => setImportKey(e.target.value)}
                       />
                       <p className="text-xs text-muted-foreground mt-1">
                         {type === 'evm'
                           ? 'Must be 0x-prefixed 64 hex characters'
-                          : '64-byte base58-encoded Solana keypair'}
+                          : type === 'solana'
+                          ? '64-byte base58-encoded Solana keypair'
+                          : '64 hex characters (no 0x prefix)'}
                       </p>
                     </div>
                     <Button

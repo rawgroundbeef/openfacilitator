@@ -4,8 +4,8 @@ import * as Switch from '@radix-ui/react-switch';
 import { cn } from '@/lib/utils';
 
 interface ChainPreferenceToggleProps {
-  preference: 'base' | 'solana';
-  onChange: (chain: 'base' | 'solana') => void;
+  preference: 'base' | 'solana' | 'stacks';
+  onChange: (chain: 'base' | 'solana' | 'stacks') => void;
   disabled?: boolean;
   compact?: boolean;
 }

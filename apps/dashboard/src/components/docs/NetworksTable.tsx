@@ -13,6 +13,8 @@ const networks = [
   { name: 'X Layer Testnet', v1: 'xlayer-testnet', v2: 'eip155:195', chainId: 195, type: 'EVM', testnet: true },
   { name: 'Solana', v1: 'solana', v2: 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp', chainId: null, type: 'Solana', testnet: false },
   { name: 'Solana Devnet', v1: 'solana-devnet', v2: 'solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1', chainId: null, type: 'Solana', testnet: true },
+  { name: 'Stacks', v1: 'stacks', v2: 'stacks:1', chainId: null, type: 'Stacks', testnet: false },
+  { name: 'Stacks Testnet', v1: 'stacks-testnet', v2: 'stacks:2147483648', chainId: null, type: 'Stacks', testnet: true },
 ];
 
 export function NetworksTable() {

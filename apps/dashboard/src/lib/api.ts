@@ -193,6 +193,12 @@ export interface SolanaWalletInfo {
   balance: { sol: string; lamports: string } | null;
 }
 
+export interface StacksWalletInfo {
+  hasWallet: boolean;
+  address: string | null;
+  balance: { stx: string; microStx: string } | null;
+}
+
 export interface WalletGenerateResponse {
   success: boolean;
   address: string;
@@ -234,7 +240,7 @@ export interface WalletBalanceResponse {
 }
 
 export interface ChainPreference {
-  preferredChain: 'base' | 'solana';
+  preferredChain: 'base' | 'solana' | 'stacks';
 }
 
 export interface ChainPreferenceUpdateResponse {
@@ -835,6 +841,36 @@ class ApiClient {
 
   async deleteSolanaWallet(facilitatorId: string): Promise<{ success: boolean; message: string }> {
     return this.request(`/api/admin/facilitators/${facilitatorId}/wallet/solana`, {
+      method: 'DELETE',
+    });
+  }
+
+  // ============ Stacks Wallet ============
+
+  async getStacksWallet(facilitatorId: string): Promise<StacksWalletInfo> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/wallet/stacks`);
+  }
+
+  async generateStacksWallet(facilitatorId: string): Promise<WalletGenerateResponse> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/wallet/stacks`, {
+      method: 'POST',
+    });
+  }
+
+  async importStacksWallet(
+    facilitatorId: string,
+    privateKey: string
+  ): Promise<WalletGenerateResponse> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/wallet/stacks/import`, {
+      method: 'POST',
+      body: JSON.stringify({ privateKey }),
+    });
+  }
+
+  async deleteStacksWallet(
+    facilitatorId: string
+  ): Promise<{ success: boolean; message: string }> {
+    return this.request(`/api/admin/facilitators/${facilitatorId}/wallet/stacks`, {
       method: 'DELETE',
     });
   }

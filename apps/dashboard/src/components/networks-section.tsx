@@ -10,6 +10,7 @@ import {
   SUPPORTED_NETWORKS,
   getEvmNetworks,
   getSolanaNetworks,
+  getStacksNetworks,
   type WalletInfo,
 } from './network-card';
 import { api } from '@/lib/api';
@@ -33,6 +34,13 @@ export function NetworksSection({ facilitatorId }: NetworksSectionProps) {
   const { data: solanaWallet } = useQuery({
     queryKey: ['solanaWallet', facilitatorId],
     queryFn: () => api.getSolanaWallet(facilitatorId),
+    enabled: !!facilitatorId,
+  });
+
+  // Stacks Wallet queries
+  const { data: stacksWallet } = useQuery({
+    queryKey: ['stacksWallet', facilitatorId],
+    queryFn: () => api.getStacksWallet(facilitatorId),
     enabled: !!facilitatorId,
   });
 
@@ -80,6 +88,28 @@ export function NetworksSection({ facilitatorId }: NetworksSectionProps) {
     },
   });
 
+  // Stacks Wallet mutations
+  const generateStacksWallet = useMutation({
+    mutationFn: () => api.generateStacksWallet(facilitatorId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['stacksWallet', facilitatorId] });
+    },
+  });
+
+  const importStacksWallet = useMutation({
+    mutationFn: (privateKey: string) => api.importStacksWallet(facilitatorId, privateKey),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['stacksWallet', facilitatorId] });
+    },
+  });
+
+  const deleteStacksWallet = useMutation({
+    mutationFn: () => api.deleteStacksWallet(facilitatorId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['stacksWallet', facilitatorId] });
+    },
+  });
+
   // Map wallet data
   const getEvmWalletInfo = (): WalletInfo | null => {
     if (!evmWallet?.hasWallet) return null;
@@ -100,8 +130,18 @@ export function NetworksSection({ facilitatorId }: NetworksSectionProps) {
     };
   };
 
+  const getStacksWalletInfo = (): WalletInfo | null => {
+    if (!stacksWallet?.hasWallet) return null;
+    return {
+      address: stacksWallet.address || null,
+      balance: stacksWallet.balance?.microStx,
+      balanceFormatted: stacksWallet.balance?.stx,
+    };
+  };
+
   const evmNetworks = getEvmNetworks();
   const solanaNetworks = getSolanaNetworks();
+  const stacksNetworks = getStacksNetworks();
 
   return (
     <div className="space-y-4">
@@ -159,6 +199,21 @@ export function NetworksSection({ facilitatorId }: NetworksSectionProps) {
           onImport={(pk) => importSolanaWallet.mutate(pk)}
           onDelete={() => deleteSolanaWallet.mutate()}
         />
+
+        <WalletTypeCard
+          type="stacks"
+          title="Stacks Wallet"
+          subtitle="Required for STX, sBTC, and USDCx payments"
+          wallet={getStacksWalletInfo()}
+          networks={stacksNetworks}
+          showTestnets={showTestnets}
+          isGenerating={generateStacksWallet.isPending}
+          isImporting={importStacksWallet.isPending}
+          isDeleting={deleteStacksWallet.isPending}
+          onGenerate={() => generateStacksWallet.mutate()}
+          onImport={(pk) => importStacksWallet.mutate(pk)}
+          onDelete={() => deleteStacksWallet.mutate()}
+        />
       </div>
     </div>
   );
@@ -178,19 +233,27 @@ export function useNetworkStats(facilitatorId: string) {
     enabled: !!facilitatorId,
   });
 
+  const { data: stacksWallet } = useQuery({
+    queryKey: ['stacksWallet', facilitatorId],
+    queryFn: () => api.getStacksWallet(facilitatorId),
+    enabled: !!facilitatorId,
+  });
+
   const evmConfigured = evmWallet?.hasWallet ?? false;
   const solanaConfigured = solanaWallet?.hasWallet ?? false;
+  const stacksConfigured = stacksWallet?.hasWallet ?? false;
 
   // Count mainnet networks enabled
   const evmMainnets = getEvmNetworks().filter(n => !n.testnet).length;
   const solanaMainnets = getSolanaNetworks().filter(n => !n.testnet).length;
+  const stacksMainnets = getStacksNetworks().filter(n => !n.testnet).length;
 
-  const networksEnabled = (evmConfigured ? evmMainnets : 0) + (solanaConfigured ? solanaMainnets : 0);
-  const totalMainnets = evmMainnets + solanaMainnets;
+  const networksEnabled = (evmConfigured ? evmMainnets : 0) + (solanaConfigured ? solanaMainnets : 0) + (stacksConfigured ? stacksMainnets : 0);
+  const totalMainnets = evmMainnets + solanaMainnets + stacksMainnets;
 
   return {
-    walletsConfigured: (evmConfigured ? 1 : 0) + (solanaConfigured ? 1 : 0),
-    totalWallets: 2,
+    walletsConfigured: (evmConfigured ? 1 : 0) + (solanaConfigured ? 1 : 0) + (stacksConfigured ? 1 : 0),
+    totalWallets: 3,
     networksEnabled,
     totalMainnets,
   };

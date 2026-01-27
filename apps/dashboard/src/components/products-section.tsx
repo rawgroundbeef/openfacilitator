@@ -57,6 +57,7 @@ interface ProductsSectionProps {
 const NETWORK_OPTIONS = [
   { value: 'base', label: 'Base', chainId: 8453 },
   { value: 'solana', label: 'Solana', chainId: 'solana' },
+  { value: 'stacks', label: 'Stacks', chainId: 'stacks' },
 ];
 
 const TOKEN_OPTIONS: Record<string, { address: string; symbol: string; decimals: number }[]> = {
@@ -65,6 +66,11 @@ const TOKEN_OPTIONS: Record<string, { address: string; symbol: string; decimals:
   ],
   solana: [
     { address: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', symbol: 'USDC', decimals: 6 },
+  ],
+  stacks: [
+    { address: 'STX', symbol: 'STX', decimals: 6 },
+    { address: 'SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token', symbol: 'sBTC', decimals: 8 },
+    { address: 'SP120SBRBQJ00MCWS7TM5R8WJNTTKD5K0HFRC2CNE.usdcx', symbol: 'USDCx', decimals: 6 },
   ],
 };
 
