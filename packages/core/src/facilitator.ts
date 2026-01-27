@@ -20,9 +20,10 @@ import {
   type X402PaymentPayload,
   type ChainId,
 } from './types.js';
-import { getChainIdFromNetwork, getNetworkFromChainId, getCaip2FromNetwork, defaultChains } from './chains.js';
+import { getChainIdFromNetwork, getNetworkFromChainId, getCaip2FromNetwork, defaultChains, isStacksChain } from './chains.js';
 import { executeERC3009Settlement } from './erc3009.js';
 import { executeSolanaSettlement } from './solana.js';
+import { executeStacksSettlement } from './stacks.js';
 
 /**
  * Custom chain definitions for chains not in viem
@@ -252,6 +253,24 @@ export class Facilitator {
         };
       }
 
+      // Handle Stacks verification
+      if (isStacksChain(chainId)) {
+        // Stacks payloads have transaction in payload.payload.transaction
+        const stacksPayload = payload.payload || payload;
+        if (!stacksPayload.transaction) {
+          return {
+            isValid: false,
+            invalidReason: 'Missing transaction in Stacks payment payload',
+          };
+        }
+        // For Stacks, like Solana, we trust the pre-signed transaction
+        // Full verification happens during settlement (broadcast + confirmation)
+        return {
+          isValid: true,
+          payer: 'stacks-payer', // Payer is embedded in the transaction
+        };
+      }
+
       // EVM verification
       if (isEVMChain(chainId)) {
         const client = this.clients.get(chainId);
@@ -405,6 +424,36 @@ export class Facilitator {
             errorReason: result.errorMessage,
           };
         }
+      }
+
+      // Handle Stacks chains
+      if (isStacksChain(chainId)) {
+        const stacksPayload = payload.payload || payload;
+        const signedTransaction = stacksPayload.transaction;
+
+        if (!signedTransaction) {
+          return {
+            success: false,
+            transaction: '',
+            payer: verification.payer || 'stacks-payer',
+            network: requirements.network,
+            errorReason: 'Missing transaction in Stacks payment payload',
+          };
+        }
+
+        const result = await executeStacksSettlement({
+          network: chainId as 'stacks' | 'stacks-testnet',
+          signedTransaction,
+          facilitatorPrivateKey: privateKey,
+        });
+
+        return {
+          success: result.success,
+          transaction: result.transactionHash || '',
+          payer: result.payer || verification.payer || 'stacks-payer',
+          network: requirements.network,
+          errorReason: result.errorMessage,
+        };
       }
 
       // Handle EVM chains (Base, Ethereum)
