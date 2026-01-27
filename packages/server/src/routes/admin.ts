@@ -115,6 +115,8 @@ import {
   getDomainStatus, 
   isRailwayConfigured 
 } from '../services/railway.js';
+import crypto from 'crypto';
+import { getAddressFromPrivateKey, TransactionVersion } from '@stacks/transactions';
 import { encryptPrivateKey, decryptPrivateKey, generateWallet } from '../utils/crypto.js';
 import {
   generateWalletForUser,
@@ -124,6 +126,7 @@ import {
   getAllWalletsForUser,
   getUSDCBalance,
   getBaseUSDCBalance,
+  getStacksSTXBalance,
 } from '../services/wallet.js';
 import { generateWebhookSecret, deliverWebhook } from '../services/webhook.js';
 import type { Hex } from 'viem';
@@ -1219,15 +1222,8 @@ router.post('/facilitators/:id/wallet/stacks', requireAuth, async (req: Request,
     }
 
     // Generate new Stacks wallet
-    const crypto = await import('crypto');
     const privateKey = crypto.randomBytes(32).toString('hex');
-
-    // Derive Stacks address
-    const { getAddressFromPrivateKey, TransactionVersion } = await import('@stacks/transactions');
     const address = getAddressFromPrivateKey(privateKey, TransactionVersion.Mainnet);
-
-    // Encrypt and store
-    const { encryptPrivateKey } = await import('../utils/crypto.js');
     const encryptedKey = encryptPrivateKey(privateKey);
 
     const updated = updateFacilitator(req.params.id, { encrypted_stacks_private_key: encryptedKey });
@@ -1272,12 +1268,8 @@ router.post('/facilitators/:id/wallet/stacks/import', requireAuth, async (req: R
       return;
     }
 
-    // Derive Stacks address
-    const { getAddressFromPrivateKey, TransactionVersion } = await import('@stacks/transactions');
+    // Derive Stacks address and encrypt
     const address = getAddressFromPrivateKey(clean, TransactionVersion.Mainnet);
-
-    // Encrypt and store
-    const { encryptPrivateKey } = await import('../utils/crypto.js');
     const encryptedKey = encryptPrivateKey(clean);
 
     const updated = updateFacilitator(req.params.id, { encrypted_stacks_private_key: encryptedKey });
@@ -1315,17 +1307,13 @@ router.get('/facilitators/:id/wallet/stacks', requireAuth, async (req: Request, 
     }
 
     // Decrypt to get address
-    const { decryptPrivateKey } = await import('../utils/crypto.js');
     const privateKey = decryptPrivateKey(facilitator.encrypted_stacks_private_key);
-
-    const { getAddressFromPrivateKey, TransactionVersion } = await import('@stacks/transactions');
     const address = getAddressFromPrivateKey(privateKey, TransactionVersion.Mainnet);
 
     // Get balance
     let balance: { stx: string; microStx: string } | null = null;
     try {
-      const { getStacksBalance } = await import('@openfacilitator/core');
-      const balanceInfo = await getStacksBalance('stacks', address);
+      const balanceInfo = await getStacksSTXBalance(address);
       balance = { stx: balanceInfo.formatted, microStx: balanceInfo.balance.toString() };
     } catch {
       // Balance check may fail if node is unreachable

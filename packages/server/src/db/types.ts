@@ -12,6 +12,7 @@ export interface FacilitatorRecord {
   supported_tokens: string; // JSON string
   encrypted_private_key: string | null; // EVM (Ethereum/Base) private key
   encrypted_solana_private_key: string | null; // Solana private key
+  encrypted_stacks_private_key: string | null; // Stacks private key
   favicon: string | null; // Base64-encoded favicon image
   webhook_url: string | null; // URL to POST settlement notifications
   webhook_secret: string | null; // Secret for HMAC signing webhook payloads

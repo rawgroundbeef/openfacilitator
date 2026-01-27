@@ -140,6 +140,7 @@ export function updateFacilitator(
     supported_tokens: string;
     encrypted_private_key: string;
     encrypted_solana_private_key: string;
+    encrypted_stacks_private_key: string;
     favicon: string | null;
     webhook_url: string;
     webhook_secret: string;
@@ -178,6 +179,10 @@ export function updateFacilitator(
   if (updates.encrypted_solana_private_key !== undefined) {
     fields.push('encrypted_solana_private_key = ?');
     values.push(updates.encrypted_solana_private_key);
+  }
+  if (updates.encrypted_stacks_private_key !== undefined) {
+    fields.push('encrypted_stacks_private_key = ?');
+    values.push(updates.encrypted_stacks_private_key);
   }
   if (updates.favicon !== undefined) {
     fields.push('favicon = ?');

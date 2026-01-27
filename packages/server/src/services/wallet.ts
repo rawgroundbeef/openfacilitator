@@ -7,8 +7,6 @@ import {
   getSolanaPublicKey,
   getSolanaUSDCBalance,
   getStacksBalance,
-  isValidStacksAddress,
-  isValidStacksPrivateKey,
 } from '@openfacilitator/core';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { createPublicClient, http, erc20Abi } from 'viem';

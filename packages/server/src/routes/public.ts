@@ -1,5 +1,5 @@
 import { Router, type Request, type Response, type IRouter } from 'express';
-import { createFacilitator, type FacilitatorConfig, type TokenConfig, getSolanaPublicKey, networkToCaip2 } from '@openfacilitator/core';
+import { createFacilitator, type FacilitatorConfig, type TokenConfig, getSolanaPublicKey, networkToCaip2, isStacksNetwork } from '@openfacilitator/core';
 import { OpenFacilitator, createPaymentMiddleware, type PaymentPayload, type PaymentRequirements } from '@openfacilitator/sdk';
 import { privateKeyToAccount } from 'viem/accounts';
 
@@ -74,7 +74,7 @@ function getFreeFacilitatorConfig(): { config: FacilitatorConfig; evmPrivateKey?
   const solanaAddress = process.env.FREE_FACILITATOR_SOLANA_ADDRESS;
 
   // At minimum we need one wallet configured
-  if (!evmPrivateKey && !solanaPrivateKey) {
+  if (!evmPrivateKey && !solanaPrivateKey && !stacksPrivateKey) {
     return null;
   }
 
@@ -119,7 +119,7 @@ function getFreeFacilitatorConfig(): { config: FacilitatorConfig; evmPrivateKey?
     supportedChains.push('stacks');
     supportedTokens.push({
       symbol: 'STX',
-      address: 'native',
+      address: 'STX',
       decimals: 6,
       chainId: 'stacks',
     });
@@ -149,15 +149,7 @@ function isSolanaNetwork(network: string): boolean {
          network.startsWith('solana:');
 }
 
-/**
- * Check if a network identifier is a Stacks network
- */
-function isStacksNetwork(network: string): boolean {
-  return network === 'stacks' ||
-         network === 'stacks-mainnet' ||
-         network === 'stacks-testnet' ||
-         network.startsWith('stacks:');
-}
+// isStacksNetwork is imported from @openfacilitator/core
 
 /**
  * GET /free/supported - Get supported payment networks (no auth required)

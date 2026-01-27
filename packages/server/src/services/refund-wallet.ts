@@ -7,6 +7,7 @@ import {
   getSolanaPublicKey,
   getSolanaUSDCBalance,
   getStacksBalance,
+  isStacksNetwork,
 } from '@openfacilitator/core';
 import { createPublicClient, http, type Address } from 'viem';
 import { base } from 'viem/chains';
@@ -37,18 +38,13 @@ const BALANCE_OF_ABI = [
   },
 ] as const;
 
+// isStacksNetwork is imported from @openfacilitator/core
+
 /**
  * Check if a network is a Solana network
  */
 function isSolanaNetwork(network: string): boolean {
-  return network === 'solana' || network === 'solana-mainnet' || network === 'solana-devnet';
-}
-
-/**
- * Check if a network is a Stacks network
- */
-function isStacksNetwork(network: string): boolean {
-  return network === 'stacks' || network === 'stacks-testnet';
+  return network === 'solana' || network === 'solana-mainnet' || network === 'solana-devnet' || network.startsWith('solana:');
 }
 
 /**
