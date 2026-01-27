@@ -70,9 +70,9 @@ export async function generateRefundWallet(
     encryptedKey = encryptPrivateKey(keypair.privateKey);
   } else if (isStacksNetwork(network)) {
     // Generate Stacks keypair
-    const { getAddressFromPrivateKey, TransactionVersion } = await import('@stacks/transactions');
+    const { getAddressFromPrivateKey } = await import('@stacks/transactions');
     const privateKey = crypto.randomBytes(32).toString('hex');
-    const stacksAddress = getAddressFromPrivateKey(privateKey, TransactionVersion.Mainnet);
+    const stacksAddress = getAddressFromPrivateKey(privateKey, 'mainnet');
     address = stacksAddress;
     encryptedKey = encryptPrivateKey(privateKey);
   } else {

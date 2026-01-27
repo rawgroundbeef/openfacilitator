@@ -116,7 +116,7 @@ import {
   isRailwayConfigured 
 } from '../services/railway.js';
 import crypto from 'crypto';
-import { getAddressFromPrivateKey, TransactionVersion } from '@stacks/transactions';
+import { getAddressFromPrivateKey } from '@stacks/transactions';
 import { encryptPrivateKey, decryptPrivateKey, generateWallet } from '../utils/crypto.js';
 import {
   generateWalletForUser,
@@ -1223,7 +1223,7 @@ router.post('/facilitators/:id/wallet/stacks', requireAuth, async (req: Request,
 
     // Generate new Stacks wallet
     const privateKey = crypto.randomBytes(32).toString('hex');
-    const address = getAddressFromPrivateKey(privateKey, TransactionVersion.Mainnet);
+    const address = getAddressFromPrivateKey(privateKey, 'mainnet');
     const encryptedKey = encryptPrivateKey(privateKey);
 
     const updated = updateFacilitator(req.params.id, { encrypted_stacks_private_key: encryptedKey });
@@ -1269,7 +1269,7 @@ router.post('/facilitators/:id/wallet/stacks/import', requireAuth, async (req: R
     }
 
     // Derive Stacks address and encrypt
-    const address = getAddressFromPrivateKey(clean, TransactionVersion.Mainnet);
+    const address = getAddressFromPrivateKey(clean, 'mainnet');
     const encryptedKey = encryptPrivateKey(clean);
 
     const updated = updateFacilitator(req.params.id, { encrypted_stacks_private_key: encryptedKey });
@@ -1308,7 +1308,7 @@ router.get('/facilitators/:id/wallet/stacks', requireAuth, async (req: Request, 
 
     // Decrypt to get address
     const privateKey = decryptPrivateKey(facilitator.encrypted_stacks_private_key);
-    const address = getAddressFromPrivateKey(privateKey, TransactionVersion.Mainnet);
+    const address = getAddressFromPrivateKey(privateKey, 'mainnet');
 
     // Get balance
     let balance: { stx: string; microStx: string } | null = null;

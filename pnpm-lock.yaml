@@ -278,8 +278,8 @@ importers:
         specifier: ^1.98.4
         version: 1.98.4(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)
       '@stacks/transactions':
-        specifier: ^6.13.0
-        version: 6.17.0
+        specifier: ^7.3.1
+        version: 7.3.1
       '@x402jobs/sdk':
         specifier: 0.2.2
         version: 0.2.2
@@ -3422,20 +3422,11 @@ packages:
     peerDependencies:
       '@solana/web3.js': '*'
 
-  '@stacks/common@6.16.0':
-    resolution: {integrity: sha512-PnzvhrdGRMVZvxTulitlYafSK4l02gPCBBoI9QEoTqgSnv62oaOXhYAUUkTMFKxdHW1seVEwZsrahuXiZPIAwg==}
-
   '@stacks/common@7.3.1':
     resolution: {integrity: sha512-29ANTFcSSlXnGQlgDVWg7OQ74lgQhu3x8JkeN19Q+UE/1lbQrzcctgPHG74XHjWNp8NPBqskUYA8/HLgIKuKNQ==}
 
-  '@stacks/network@6.17.0':
-    resolution: {integrity: sha512-numHbfKjwco/rbkGPOEz8+FcJ2nBnS/tdJ8R422Q70h3SiA9eqk9RjSzB8p4JP8yW1SZvW+eihADHfMpBuZyfw==}
-
   '@stacks/network@7.3.1':
     resolution: {integrity: sha512-dQjhcwkz8lihSYSCUMf7OYeEh/Eh0++NebDtXbIB3pHWTvNCYEH7sxhYTB1iyunurv31/QEi0RuWdlfXK/BjeA==}
-
-  '@stacks/transactions@6.17.0':
-    resolution: {integrity: sha512-FUah2BRgV66ApLcEXGNGhwyFTRXqX5Zco3LpiM3essw8PF0NQlHwwdPgtDko5RfrJl3LhGXXe/30nwsfNnB3+g==}
 
   '@stacks/transactions@7.3.1':
     resolution: {integrity: sha512-ufnC1BPrOKz5b5gxxdseP3vBrFq1+qx1L6t+J/QnjXULyWdkhtS+LBEqRw2bL5qNteMvU2GhqPgFtYQPzolGbw==}
@@ -3648,9 +3639,6 @@ packages:
   '@types/better-sqlite3@7.6.13':
     resolution: {integrity: sha512-NMv9ASNARoKksWtsq/SHakpYAYnhBrQgGD8zkLYk/jaK8jUGn08CfEdTRgYhMypUQAfzSP8W6gNLe0q19/t4VA==}
 
-  '@types/bn.js@5.2.0':
-    resolution: {integrity: sha512-DLbJ1BPqxvQhIGbeu8VbUC1DiAiahHtAYvA0ZEAa4P31F7IaArc8z3C3BRQdWX4mtLQuABG4yzp76ZrS02Ui1Q==}
-
   '@types/body-parser@1.19.6':
     resolution: {integrity: sha512-HLFeCYgz89uk22N5Qg3dvGvsv46B8GLvKKo1zKG4NybA8U2DiEO3w9lqGg29t/tfLRJpJ6iQxnVw4OnB7MoM9g==}
 
@@ -3752,9 +3740,6 @@ packages:
 
   '@types/node@12.20.55':
     resolution: {integrity: sha512-J8xLz7q2OFulZ2cyGTLE1TbbZcjpno7FaN6zdJNrgAdrJ+DZzh/uFR6YrTb4C+nXakvud8Q4+rbhoIWlYQbUFQ==}
-
-  '@types/node@18.19.130':
-    resolution: {integrity: sha512-GRaXQx6jGfL8sKfaIDD6OupbIHBr9jv7Jnaml9tB7l4v068PAOXqfcujMMo5PhbIs6ggR1XODELqahT2R8v0fg==}
 
   '@types/node@22.19.3':
     resolution: {integrity: sha512-1N9SBnWYOJTrNZCdh/yJE+t910Y128BoyY+zBLWhL3r0TYzlTmFdXrPwHL9DyFZmlEXNQQolTZh3KHV31QDhyA==}
@@ -7654,9 +7639,6 @@ packages:
 
   uncrypto@0.1.3:
     resolution: {integrity: sha512-Ql87qFHB3s/De2ClA9e0gsnS6zXG27SkTiSJwjCc9MebbfapQfuPzumMIUMi38ezPZVNFcHI9sUIepeQfw8J8Q==}
-
-  undici-types@5.26.5:
-    resolution: {integrity: sha512-JlCMO+ehdEIKqlFxk6IfVoAUVmgz7cU7zD/h9XZ0qzeosSHmUJVOzSQvvYSYWXkFXC+IfLKSIffhv0sVZup6pA==}
 
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
@@ -12291,35 +12273,12 @@ snapshots:
       eventemitter3: 5.0.1
       uuid: 9.0.1
 
-  '@stacks/common@6.16.0':
-    dependencies:
-      '@types/bn.js': 5.2.0
-      '@types/node': 18.19.130
-
   '@stacks/common@7.3.1': {}
-
-  '@stacks/network@6.17.0':
-    dependencies:
-      '@stacks/common': 6.16.0
-      cross-fetch: 3.2.0
-    transitivePeerDependencies:
-      - encoding
 
   '@stacks/network@7.3.1':
     dependencies:
       '@stacks/common': 7.3.1
       cross-fetch: 3.2.0
-    transitivePeerDependencies:
-      - encoding
-
-  '@stacks/transactions@6.17.0':
-    dependencies:
-      '@noble/hashes': 1.1.5
-      '@noble/secp256k1': 1.7.1
-      '@stacks/common': 6.16.0
-      '@stacks/network': 6.17.0
-      c32check: 2.0.0
-      lodash.clonedeep: 4.5.0
     transitivePeerDependencies:
       - encoding
 
@@ -12747,10 +12706,6 @@ snapshots:
     dependencies:
       '@types/node': 22.19.3
 
-  '@types/bn.js@5.2.0':
-    dependencies:
-      '@types/node': 22.19.3
-
   '@types/body-parser@1.19.6':
     dependencies:
       '@types/connect': 3.4.38
@@ -12857,10 +12812,6 @@ snapshots:
   '@types/node-cron@3.0.11': {}
 
   '@types/node@12.20.55': {}
-
-  '@types/node@18.19.130':
-    dependencies:
-      undici-types: 5.26.5
 
   '@types/node@22.19.3':
     dependencies:
@@ -18564,8 +18515,6 @@ snapshots:
       multiformats: 9.9.0
 
   uncrypto@0.1.3: {}
-
-  undici-types@5.26.5: {}
 
   undici-types@6.21.0: {}
 

@@ -87,8 +87,8 @@ export async function generateStacksWalletForUser(userId: string): Promise<{ add
   const privateKey = crypto.randomBytes(32).toString('hex');
 
   // Derive the Stacks address using @stacks/transactions
-  const { getAddressFromPrivateKey, TransactionVersion } = await import('@stacks/transactions');
-  const address = getAddressFromPrivateKey(privateKey, TransactionVersion.Mainnet);
+  const { getAddressFromPrivateKey } = await import('@stacks/transactions');
+  const address = getAddressFromPrivateKey(privateKey, 'mainnet');
 
   // Encrypt and store
   const encrypted = encryptPrivateKey(privateKey);
