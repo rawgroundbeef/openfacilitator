@@ -6,9 +6,11 @@ import {
   generateSolanaKeypair,
   getSolanaPublicKey,
   getSolanaUSDCBalance,
+  getStacksBalance,
 } from '@openfacilitator/core';
 import { createPublicClient, http, type Address } from 'viem';
 import { base } from 'viem/chains';
+import crypto from 'crypto';
 import { encryptPrivateKey, decryptPrivateKey, generateEVMWallet } from '../utils/crypto.js';
 import { privateKeyToAccount } from 'viem/accounts';
 import {
@@ -43,6 +45,13 @@ function isSolanaNetwork(network: string): boolean {
 }
 
 /**
+ * Check if a network is a Stacks network
+ */
+function isStacksNetwork(network: string): boolean {
+  return network === 'stacks' || network === 'stacks-testnet';
+}
+
+/**
  * Generate a new refund wallet for a resource owner on a specific network
  */
 export async function generateRefundWallet(
@@ -63,6 +72,13 @@ export async function generateRefundWallet(
     const keypair = generateSolanaKeypair();
     address = keypair.publicKey;
     encryptedKey = encryptPrivateKey(keypair.privateKey);
+  } else if (isStacksNetwork(network)) {
+    // Generate Stacks keypair
+    const { getAddressFromPrivateKey, TransactionVersion } = await import('@stacks/transactions');
+    const privateKey = crypto.randomBytes(32).toString('hex');
+    const stacksAddress = getAddressFromPrivateKey(privateKey, TransactionVersion.Mainnet);
+    address = stacksAddress;
+    encryptedKey = encryptPrivateKey(privateKey);
   } else {
     // Generate EVM keypair
     const wallet = generateEVMWallet();
@@ -92,6 +108,9 @@ export async function getRefundWalletBalance(
   if (isSolanaNetwork(network)) {
     const solanaNetwork = network === 'solana-devnet' ? 'solana-devnet' : 'solana';
     return getSolanaUSDCBalance(solanaNetwork, wallet.wallet_address);
+  } else if (isStacksNetwork(network)) {
+    const stacksNetwork = network === 'stacks-testnet' ? 'stacks-testnet' : 'stacks';
+    return getStacksBalance(stacksNetwork, wallet.wallet_address);
   } else {
     // EVM balance check
     const usdcAddress = USDC_ADDRESSES[network];
@@ -170,5 +189,5 @@ export function deleteRefundWallet(resourceOwnerId: string, network: string): bo
 /**
  * Supported networks for refund wallets
  */
-export const SUPPORTED_REFUND_NETWORKS = ['base', 'solana'] as const;
+export const SUPPORTED_REFUND_NETWORKS = ['base', 'solana', 'stacks'] as const;
 export type SupportedRefundNetwork = typeof SUPPORTED_REFUND_NETWORKS[number];

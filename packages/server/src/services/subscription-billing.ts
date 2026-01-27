@@ -31,7 +31,7 @@ const X402_JOBS_PAYMENT_URL =
 export interface PaymentResult {
   success: boolean;
   txHash?: string;
-  chain?: 'solana' | 'base';
+  chain?: 'solana' | 'base' | 'stacks';
   error?: string;
   insufficientBothChains?: boolean;
   usedFallback?: boolean;

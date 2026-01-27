@@ -41,7 +41,14 @@ export async function initializeDatabase(dbPath?: string): Promise<Database.Data
       db.exec('ALTER TABLE facilitators ADD COLUMN encrypted_solana_private_key TEXT');
       console.log('✅ Added encrypted_solana_private_key column to facilitators table');
     }
-    
+
+    // Add encrypted_stacks_private_key column if it doesn't exist
+    const hasStacksColumn = columns.some(col => col.name === 'encrypted_stacks_private_key');
+    if (!hasStacksColumn) {
+      db.exec('ALTER TABLE facilitators ADD COLUMN encrypted_stacks_private_key TEXT');
+      console.log('✅ Added encrypted_stacks_private_key column to facilitators table');
+    }
+
     // Add additional_domains column if it doesn't exist
     const hasAdditionalDomainsColumn = columns.some(col => col.name === 'additional_domains');
     if (!hasAdditionalDomainsColumn) {
@@ -246,7 +253,7 @@ export async function initializeDatabase(dbPath?: string): Promise<Database.Data
         CREATE TABLE IF NOT EXISTS reward_addresses_new (
           id TEXT PRIMARY KEY,
           user_id TEXT NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
-          chain_type TEXT NOT NULL CHECK (chain_type IN ('solana', 'evm', 'facilitator')),
+          chain_type TEXT NOT NULL CHECK (chain_type IN ('solana', 'evm', 'stacks', 'facilitator')),
           address TEXT NOT NULL,
           verification_status TEXT NOT NULL DEFAULT 'pending' CHECK (verification_status IN ('pending', 'verified')),
           verified_at TEXT,
@@ -283,6 +290,7 @@ export async function initializeDatabase(dbPath?: string): Promise<Database.Data
       supported_tokens TEXT NOT NULL DEFAULT '[]',
       encrypted_private_key TEXT,
       encrypted_solana_private_key TEXT,
+      encrypted_stacks_private_key TEXT,
       favicon TEXT,
       webhook_url TEXT,
       webhook_secret TEXT,
@@ -617,7 +625,7 @@ export async function initializeDatabase(dbPath?: string): Promise<Database.Data
     CREATE TABLE IF NOT EXISTS reward_addresses (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
-      chain_type TEXT NOT NULL CHECK (chain_type IN ('solana', 'evm', 'facilitator')),
+      chain_type TEXT NOT NULL CHECK (chain_type IN ('solana', 'evm', 'stacks', 'facilitator')),
       address TEXT NOT NULL,
       verification_status TEXT NOT NULL DEFAULT 'pending' CHECK (verification_status IN ('pending', 'verified')),
       verified_at TEXT,
@@ -700,7 +708,7 @@ export async function initializeDatabase(dbPath?: string): Promise<Database.Data
     CREATE TABLE IF NOT EXISTS user_preferences (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL UNIQUE REFERENCES "user" ("id") ON DELETE CASCADE,
-      preferred_chain TEXT NOT NULL DEFAULT 'solana' CHECK (preferred_chain IN ('base', 'solana')),
+      preferred_chain TEXT NOT NULL DEFAULT 'solana' CHECK (preferred_chain IN ('base', 'solana', 'stacks')),
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -713,7 +721,7 @@ export async function initializeDatabase(dbPath?: string): Promise<Database.Data
       user_id TEXT NOT NULL REFERENCES "user" ("id") ON DELETE CASCADE,
       subscription_id TEXT REFERENCES subscriptions(id) ON DELETE SET NULL,
       amount INTEGER NOT NULL,
-      chain TEXT NOT NULL CHECK (chain IN ('solana', 'base')),
+      chain TEXT NOT NULL CHECK (chain IN ('solana', 'base', 'stacks')),
       status TEXT NOT NULL CHECK (status IN ('success', 'failed', 'pending')),
       tx_hash TEXT,
       error_message TEXT,

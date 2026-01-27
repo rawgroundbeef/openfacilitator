@@ -1,15 +1,19 @@
 /**
  * User billing wallet service
- * Manages custodial wallets for user subscriptions on Solana and Base
+ * Manages custodial wallets for user subscriptions on Solana, Base, and Stacks
  */
 import {
   generateSolanaKeypair,
   getSolanaPublicKey,
   getSolanaUSDCBalance,
+  getStacksBalance,
+  isValidStacksAddress,
+  isValidStacksPrivateKey,
 } from '@openfacilitator/core';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { createPublicClient, http, erc20Abi } from 'viem';
 import { base } from 'viem/chains';
+import crypto from 'crypto';
 import { encryptPrivateKey, decryptPrivateKey } from '../utils/crypto.js';
 import {
   createUserWallet,
@@ -68,6 +72,31 @@ export async function generateBaseWalletForUser(userId: string): Promise<{ addre
   createUserWallet(userId, account.address, encrypted, 'base');
 
   return { address: account.address, created: true };
+}
+
+/**
+ * Generate a new Stacks billing wallet for a user
+ * Returns existing wallet if one already exists on Stacks
+ */
+export async function generateStacksWalletForUser(userId: string): Promise<{ address: string; created: boolean }> {
+  // Check if Stacks wallet already exists
+  const existing = getUserWalletByUserIdAndNetwork(userId, 'stacks');
+  if (existing) {
+    return { address: existing.wallet_address, created: false };
+  }
+
+  // Generate a random 32-byte private key (hex)
+  const privateKey = crypto.randomBytes(32).toString('hex');
+
+  // Derive the Stacks address using @stacks/transactions
+  const { getAddressFromPrivateKey, TransactionVersion } = await import('@stacks/transactions');
+  const address = getAddressFromPrivateKey(privateKey, TransactionVersion.Mainnet);
+
+  // Encrypt and store
+  const encrypted = encryptPrivateKey(privateKey);
+  createUserWallet(userId, address, encrypted, 'stacks');
+
+  return { address, created: true };
 }
 
 /**
@@ -138,4 +167,11 @@ export async function getBaseUSDCBalance(address: string): Promise<{ balance: bi
     // Return zero balance on error (account may not exist or RPC issue)
     return { balance: BigInt(0), formatted: '0.00' };
   }
+}
+
+/**
+ * Get STX balance for a Stacks wallet
+ */
+export async function getStacksSTXBalance(address: string): Promise<{ balance: bigint; formatted: string }> {
+  return getStacksBalance('stacks', address);
 }
