@@ -14,11 +14,11 @@ import {
   PayloadType,
   cvToString,
   ClarityType,
+  addressToString,
 } from '@stacks/transactions';
 import type {
   TokenTransferPayloadWire,
   ContractCallPayload,
-  AddressWire,
 } from '@stacks/transactions';
 
 // ===== Types =====
@@ -29,6 +29,12 @@ export interface StacksSettlementParams {
   signedTransaction: string;
   /** Not used for broadcast (payer pre-signs), but kept for interface consistency */
   facilitatorPrivateKey: string;
+  /** Expected payment recipient — used for post-confirmation verification */
+  expectedRecipient?: string;
+  /** Expected payment amount (in base units) — used for post-confirmation verification */
+  expectedAmount?: string;
+  /** Expected asset ('STX' or contract principal) — used for post-confirmation verification */
+  expectedAsset?: string;
 }
 
 export interface StacksSettlementResult {
@@ -71,11 +77,12 @@ async function hiroFetch(
   url: string,
   options?: RequestInit & { maxRetries?: number }
 ): Promise<Response> {
-  const maxRetries = options?.maxRetries ?? 3;
+  const { maxRetries: maxRetriesOpt, ...fetchOptions } = options ?? {};
+  const maxRetries = maxRetriesOpt ?? 3;
   const baseDelay = 1000;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const response = await fetch(url, options);
+    const response = await fetch(url, fetchOptions);
 
     if (response.status !== 429) {
       return response;
@@ -98,6 +105,15 @@ async function hiroFetch(
   throw new Error('Exhausted retries');
 }
 
+// ===== Utilities =====
+
+/**
+ * Strip '0x' prefix from a hex string if present
+ */
+function stripHexPrefix(hex: string): string {
+  return hex.startsWith('0x') ? hex.slice(2) : hex;
+}
+
 // ===== Transaction Parsing =====
 
 interface ParsedStacksTransfer {
@@ -109,20 +125,14 @@ interface ParsedStacksTransfer {
 }
 
 /**
- * Convert AddressWire to string format
- */
-function addressWireToString(address: AddressWire): string {
-  // AddressWire has version and hash160
-  // Format as version prefix (1 char) + hash160 (base58)
-  // For simplicity, we'll use the hash160 directly
-  return address.hash160;
-}
-
-/**
- * Parse a signed Stacks transaction to extract transfer details
+ * Parse a signed Stacks transaction to extract transfer details.
+ *
+ * For SIP-010 transfers, extracts the recipient using positional indexing:
+ * transfer(amount uint, sender principal, recipient principal, memo (optional (buff 34)))
+ * The recipient is at index 2 (third argument).
  */
 function parseStacksTransaction(txHex: string): ParsedStacksTransfer {
-  const cleanHex = txHex.startsWith('0x') ? txHex.slice(2) : txHex;
+  const cleanHex = stripHexPrefix(txHex);
   const tx = deserializeTransaction(cleanHex);
 
   const sender = tx.auth.spendingCondition.signer;
@@ -140,7 +150,7 @@ function parseStacksTransaction(txHex: string): ParsedStacksTransfer {
 
   if (tx.payload.payloadType === PayloadType.ContractCall) {
     const payload = tx.payload as ContractCallPayload;
-    const contractAddress = addressWireToString(payload.contractAddress);
+    const contractAddress = addressToString(payload.contractAddress);
     const contractId = `${contractAddress}.${payload.contractName.content}`;
 
     // SIP-010 transfer function args: (amount uint) (sender principal) (recipient principal) (memo (optional (buff 34)))
@@ -149,15 +159,17 @@ function parseStacksTransaction(txHex: string): ParsedStacksTransfer {
       let amount = '0';
       let recipient = '';
 
-      for (const arg of args) {
-        if (arg.type === ClarityType.UInt) {
-          amount = arg.value.toString();
-        }
-        if (arg.type === ClarityType.PrincipalStandard || arg.type === ClarityType.PrincipalContract) {
-          // The recipient is typically the third arg in SIP-010 transfer
-          // (amount, sender, recipient, memo?) - we take the last principal
-          recipient = cvToString(arg);
-        }
+      // Extract amount from first arg (index 0, uint)
+      if (args.length > 0 && args[0].type === ClarityType.UInt) {
+        amount = args[0].value.toString();
+      }
+
+      // Extract recipient from third arg (index 2, principal)
+      if (
+        args.length > 2 &&
+        (args[2].type === ClarityType.PrincipalStandard || args[2].type === ClarityType.PrincipalContract)
+      ) {
+        recipient = cvToString(args[2]);
       }
 
       return {
@@ -240,9 +252,7 @@ export async function executeStacksSettlement(
 
     // Broadcast the signed transaction via Hiro API
     // The API expects raw transaction bytes as octet-stream
-    const cleanHex = signedTransaction.startsWith('0x')
-      ? signedTransaction.slice(2)
-      : signedTransaction;
+    const cleanHex = stripHexPrefix(signedTransaction);
     const txBytes = Buffer.from(cleanHex, 'hex');
 
     console.log('[StacksSettlement] Broadcasting transaction...');
@@ -288,6 +298,29 @@ export async function executeStacksSettlement(
     const confirmed = await pollForConfirmation(apiUrl, txid);
 
     if (confirmed.success) {
+      // SECURITY: Verify payment details match requirements after confirmation
+      if (params.expectedRecipient && params.expectedAmount && params.expectedAsset) {
+        console.log('[StacksSettlement] Verifying transaction details...');
+        const verification = await verifyStacksTransaction(
+          network,
+          txid,
+          params.expectedRecipient,
+          params.expectedAmount,
+          params.expectedAsset
+        );
+
+        if (!verification.isValid) {
+          console.error('[StacksSettlement] Verification FAILED:', verification.invalidReason);
+          return {
+            success: false,
+            transactionHash: txid,
+            payer: verification.payer || confirmed.sender || sender,
+            errorMessage: `Settlement verification failed: ${verification.invalidReason}`,
+          };
+        }
+        console.log('[StacksSettlement] Verification passed.');
+      }
+
       console.log('[StacksSettlement] SUCCESS! Transaction confirmed:', txid);
       return {
         success: true,

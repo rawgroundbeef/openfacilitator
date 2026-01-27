@@ -165,8 +165,7 @@ export class Facilitator {
       seenNetworks.add(network);
 
       const caip2Network = getCaip2FromNetwork(network);
-      const chainConfig = defaultChains[String(chainId)];
-      const isSolana = chainConfig && !chainConfig.isEVM;
+      const isSolana = chainId === 'solana' || chainId === 'solana-devnet';
 
       // v1 format - human-readable network name
       const v1Kind: SupportedKind = {
@@ -175,7 +174,7 @@ export class Facilitator {
         network,
       };
 
-      // Add feePayer extra for Solana
+      // Add feePayer extra for Solana only (Stacks has no fee-payer model)
       if (isSolana) {
         v1Kind.extra = { feePayer: this.config.ownerAddress };
       }
@@ -441,10 +440,14 @@ export class Facilitator {
           };
         }
 
+        // SECURITY: Pass payment requirements for post-confirmation verification
         const result = await executeStacksSettlement({
           network: chainId as 'stacks' | 'stacks-testnet',
           signedTransaction,
           facilitatorPrivateKey: privateKey,
+          expectedRecipient: requirements.payTo,
+          expectedAmount: getRequiredAmount(requirements),
+          expectedAsset: requirements.asset,
         });
 
         return {

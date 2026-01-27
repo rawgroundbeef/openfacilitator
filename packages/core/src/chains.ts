@@ -282,10 +282,10 @@ export function getChainIdFromNetwork(network: string): number | string | undefi
   // Try Stacks CAIP-2 format
   if (network.startsWith('stacks:')) {
     const chainRef = network.slice(7); // Remove 'stacks:' prefix
-    if (chainRef === '1') {
+    if (chainRef === stacksChainRefs.mainnet) {
       return 'stacks';
     }
-    if (chainRef === '2147483648') {
+    if (chainRef === stacksChainRefs.testnet) {
       return 'stacks-testnet';
     }
   }
@@ -429,9 +429,9 @@ export function getCaip2Namespace(network: string): string {
   const config = getChainConfig(network);
   if (!config) return 'eip155:*';
   if (config.isEVM) return 'eip155:*';
-  if (String(config.chainId).startsWith('solana')) return 'solana:*';
-  if (String(config.chainId).startsWith('stacks')) return 'stacks:*';
-  return 'eip155:*';
+  if (isStacksChain(config.chainId)) return 'stacks:*';
+  // Non-EVM, non-Stacks assumed Solana
+  return 'solana:*';
 }
 
 /**
