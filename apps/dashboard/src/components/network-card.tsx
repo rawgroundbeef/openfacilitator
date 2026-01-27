@@ -214,7 +214,23 @@ const LOW_BALANCE_THRESHOLDS = {
   evm: 0.01,    // ETH
   solana: 0.05, // SOL
   stacks: 0.5,  // STX
-};
+} as const;
+
+// Per-type display constants
+const NETWORK_ICONS = { evm: '🔷', solana: '🟣', stacks: '⚡' } as const;
+const NATIVE_SYMBOLS = { evm: 'ETH', solana: 'SOL', stacks: 'STX' } as const;
+const SETTLEMENT_LABELS = { evm: 'EVM chain', solana: 'Solana', stacks: 'Stacks' } as const;
+const IMPORT_DESCRIPTIONS = {
+  evm: 'Enter your private key (0x-prefixed hex). It will be encrypted and stored securely.',
+  solana: 'Enter your Solana private key (base58 encoded). It will be encrypted and stored securely.',
+  stacks: 'Enter your Stacks private key (64 hex characters). It will be encrypted and stored securely.',
+} as const;
+const IMPORT_PLACEHOLDERS = { evm: '0x...', solana: 'base58 encoded key...', stacks: '64 hex characters...' } as const;
+const IMPORT_HELP = {
+  evm: 'Must be 0x-prefixed 64 hex characters',
+  solana: '64-byte base58-encoded Solana keypair',
+  stacks: '64 hex characters (no 0x prefix)',
+} as const;
 
 export interface WalletInfo {
   address: string | null;
@@ -307,8 +323,8 @@ export function WalletTypeCard({
     setIsImportOpen(false);
   };
 
-  const icon = type === 'evm' ? '🔷' : type === 'solana' ? '🟣' : '⚡';
-  const nativeSymbol = type === 'evm' ? 'ETH' : type === 'solana' ? 'SOL' : 'STX';
+  const icon = NETWORK_ICONS[type];
+  const nativeSymbol = NATIVE_SYMBOLS[type];
 
   return (
     <Card className={hasWallet && balanceStatus === 'ok' ? 'border-green-500/30' : ''}>
@@ -381,7 +397,7 @@ export function WalletTypeCard({
               variant="outline"
               size="sm"
               onClick={() => {
-                if (confirm(`Remove ${title}? This will stop ${type === 'evm' ? 'EVM chain' : 'Solana'} settlements.`)) {
+                if (confirm(`Remove ${title}? This will stop ${SETTLEMENT_LABELS[type]} settlements.`)) {
                   onDelete();
                 }
               }}
@@ -421,11 +437,7 @@ export function WalletTypeCard({
                   <DialogHeader>
                     <DialogTitle>Import {title.replace(' Wallet', '')} Private Key</DialogTitle>
                     <DialogDescription>
-                      {type === 'evm'
-                        ? 'Enter your private key (0x-prefixed hex). It will be encrypted and stored securely.'
-                        : type === 'solana'
-                        ? 'Enter your Solana private key (base58 encoded). It will be encrypted and stored securely.'
-                        : 'Enter your Stacks private key (64 hex characters). It will be encrypted and stored securely.'}
+                      {IMPORT_DESCRIPTIONS[type]}
                     </DialogDescription>
                   </DialogHeader>
                   <div className="space-y-4 py-4">
@@ -434,16 +446,12 @@ export function WalletTypeCard({
                       <Input
                         id={`import-${type}`}
                         type="password"
-                        placeholder={type === 'evm' ? '0x...' : type === 'solana' ? 'base58 encoded key...' : '64 hex characters...'}
+                        placeholder={IMPORT_PLACEHOLDERS[type]}
                         value={importKey}
                         onChange={(e) => setImportKey(e.target.value)}
                       />
                       <p className="text-xs text-muted-foreground mt-1">
-                        {type === 'evm'
-                          ? 'Must be 0x-prefixed 64 hex characters'
-                          : type === 'solana'
-                          ? '64-byte base58-encoded Solana keypair'
-                          : '64 hex characters (no 0x prefix)'}
+                        {IMPORT_HELP[type]}
                       </p>
                     </div>
                     <Button
