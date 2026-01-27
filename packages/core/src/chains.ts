@@ -94,7 +94,7 @@ export const defaultChains: Record<string, ChainConfig> = {
     name: 'Stacks',
     network: 'stacks',
     rpcUrl: process.env.STACKS_RPC_URL || 'https://api.hiro.so',
-    blockExplorerUrl: 'https://explorer.stacks.co',
+    blockExplorerUrl: 'https://explorer.hiro.so',
     isEVM: false,
   },
 
@@ -169,7 +169,7 @@ export const defaultChains: Record<string, ChainConfig> = {
     name: 'Stacks Testnet',
     network: 'stacks-testnet',
     rpcUrl: process.env.STACKS_TESTNET_RPC_URL || 'https://api.testnet.hiro.so',
-    blockExplorerUrl: 'https://explorer.stacks.co/?chain=testnet',
+    blockExplorerUrl: 'https://explorer.hiro.so/?chain=testnet',
     isEVM: false,
   },
 };

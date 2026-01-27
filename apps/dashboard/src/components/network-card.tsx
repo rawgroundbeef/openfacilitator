@@ -195,8 +195,8 @@ const EXPLORER_URLS: Record<string, string> = {
   solana: 'https://solscan.io',
   'solana-devnet': 'https://solscan.io',
   // Stacks
-  stacks: 'https://explorer.stacks.co',
-  'stacks-testnet': 'https://explorer.stacks.co/?chain=testnet',
+  stacks: 'https://explorer.hiro.so',
+  'stacks-testnet': 'https://explorer.hiro.so/?chain=testnet',
 };
 
 export function getExplorerAddressUrl(type: 'evm' | 'solana' | 'stacks', address: string): string {
@@ -204,7 +204,7 @@ export function getExplorerAddressUrl(type: 'evm' | 'solana' | 'stacks', address
     return `https://solscan.io/account/${address}`;
   }
   if (type === 'stacks') {
-    return `https://explorer.stacks.co/address/${address}?chain=mainnet`;
+    return `https://explorer.hiro.so/address/${address}?chain=mainnet`;
   }
   return `https://basescan.org/address/${address}`;
 }
@@ -217,7 +217,7 @@ const LOW_BALANCE_THRESHOLDS = {
 } as const;
 
 // Per-type display constants
-const NETWORK_ICONS = { evm: '🔷', solana: '🟣', stacks: '⚡' } as const;
+const NETWORK_ICONS = { evm: '🔷', solana: '🟣', stacks: '🟠' } as const;
 const NATIVE_SYMBOLS = { evm: 'ETH', solana: 'SOL', stacks: 'STX' } as const;
 const SETTLEMENT_LABELS = { evm: 'EVM chain', solana: 'Solana', stacks: 'Stacks' } as const;
 const IMPORT_DESCRIPTIONS = {
