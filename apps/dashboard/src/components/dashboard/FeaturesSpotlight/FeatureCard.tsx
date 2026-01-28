@@ -56,7 +56,7 @@ export function FeatureCard({
   const baseClasses = `
     relative
     border border-border rounded-xl p-6 bg-card
-    flex flex-col min-w-[280px] flex-1
+    flex flex-col
     cursor-pointer
     transition-all duration-150
     hover:border-primary/50 hover:bg-muted/30 hover:scale-[1.02]
